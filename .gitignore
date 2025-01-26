@@ -1,5 +1,12 @@
 # Data
 data/ham10000/
+data/8_class_ham10000/
+
+# Logs
+logs/
+
+# .env
+.env
 
 # Cache
 .pytest_cache/
@@ -7,8 +14,11 @@ data/ham10000/
 # Singularity Container
 containers/container.sif
 
-# Models
-models/*/*.pth
+# Model weights
+models/**
 
 # PyCache
 **/__pycache__/
+
+# Wandb
+wandb/

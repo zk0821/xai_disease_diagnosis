@@ -1,0 +1,69 @@
+import os
+from torch.utils.data import Dataset
+from torchvision.io import read_image
+from PIL import Image
+import pandas as pd
+import numpy as np
+import torch
+
+
+class HAM10000Dataset(Dataset):
+    def __init__(self, path, dataframe, transforms=None) -> None:
+        self.path = path
+        self.dataframe = dataframe
+        self.transforms = transforms
+
+    def __len__(self) -> int:
+        return len(self.dataframe)
+
+    def __getitem__(self, idx):
+        img_path = f"{self.path}/images/{self.dataframe['image'].iloc[idx]}.jpg"
+        image = Image.open(img_path)
+        label = torch.tensor(int(self.dataframe["type"].iloc[idx]))
+        if self.transforms is not None:
+            image = self.transforms(image)
+        return image, label
+
+
+class HAM10000VerboseDataset(Dataset):
+    def __init__(self, dataframe, transforms=None) -> None:
+        self.dataframe = dataframe
+        self.transform = transforms
+
+    def __len__(self) -> int:
+        return len(self.dataframe.get_dataframe())
+
+    def __getitem__(self, idx):
+        img_path = f"{self.dataframe.path}/images/{self.dataframe.get_dataframe()['image'].iloc[idx]}.jpg"
+        image = Image.open(img_path)
+        label = torch.tensor(
+            np.argmax(
+                self.dataframe.get_dataframe().iloc[idx, 1:].to_numpy(dtype="float64")
+            )
+        )
+        if self.transforms is not None:
+            image = self.transforms(image)
+        return img_path, image, label
+
+
+class HAM10000Dataframe:
+    def __init__(self, path, csv_name):
+        self.path = path
+        # Read the csv file
+        self.metadata_df = pd.read_csv(os.path.join(self.path, csv_name))
+        # Add categorical type
+        self.metadata_df["diagnosis"] = self.metadata_df.iloc[:, 1:].idxmax(axis=1)
+        self.categories = pd.Categorical(self.metadata_df["diagnosis"])
+        self.metadata_df["type"] = self.categories.codes
+        # Assertions
+        assert self.metadata_df["image"].duplicated().any() is not False
+
+    def get_dataframe(self):
+        return self.metadata_df
+
+    def get_categories(self):
+        return self.categories
+
+    def print_diagnosis_counts(self):
+        grouped_df = self.metadata_df.groupby("type")
+        print(grouped_df["type"].count())
