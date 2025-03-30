@@ -23,7 +23,6 @@ class CustomVisionTransformer(TemplateModel):
         self.pretrained_model.heads[-1] = nn.Sequential()
 
     def get_num_features_of_pretrained_model(self):
-        print(f"Num in features: {self.pretrained_model.heads[-1].in_features}")
         return self.pretrained_model.heads[-1].in_features
 
     def forward(self, x):

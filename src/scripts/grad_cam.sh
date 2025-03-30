@@ -6,10 +6,9 @@
 #SBATCH --partition=gpu
 #SBATCH --gpus=1
 #SBATCH --time=24:00:00
-#SBATCH --output=logs/test.out
-#SBATCH --error=logs/test.err
-#SBATCH --job-name="Test"
+#SBATCH --output=logs/grad_cam.out
+#SBATCH --error=logs/grad_cam.err
+#SBATCH --job-name="GradCam"
 #SBATCH --exclude=gwn[01-03],gwn10,gwn[04-06]
-export SSL_CERT_FILE=containers/cacert.pem
 
-srun singularity exec --nv containers/container.sif python src/test.py
+srun singularity exec --nv containers/container.sif python src/grad_cam.py

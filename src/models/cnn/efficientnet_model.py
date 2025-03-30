@@ -8,7 +8,15 @@ class CustomEfficientNet(TemplateModel):
         super().__init__(type, num_classes)
 
     def load_pretrained(self):
-        if self.type == "b4":
+        if self.type == "b0":
+            return torch.hub.load(
+                "pytorch/vision", "efficientnet_b0", weights="IMAGENET1K_V1"
+            )
+        elif self.type == "b2":
+            return torch.hub.load(
+                "pytorch/vision", "efficientnet_b2", weights="IMAGENET1K_V1"
+            )
+        elif self.type == "b4":
             return torch.hub.load(
                 "pytorch/vision", "efficientnet_b4", weights="IMAGENET1K_V1"
             )
@@ -19,6 +27,14 @@ class CustomEfficientNet(TemplateModel):
         elif self.type == "b7":
             return torch.hub.load(
                 "pytorch/vision", "efficientnet_b7", weights="IMAGENET1K_V1"
+            )
+        elif self.type == "v2_s":
+            return torch.hub.load(
+                "pytorch/vision", "efficientnet_v2_s", weights="IMAGENET1K_V1"
+            )
+        elif self.type == "v2_l":
+            return torch.hub.load(
+                "pytorch/vision", "efficientnet_v2_l", weights="IMAGENET1K_V1"
             )
         else:
             raise RuntimeError(

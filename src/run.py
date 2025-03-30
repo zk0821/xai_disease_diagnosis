@@ -18,7 +18,7 @@ def main(run):
         model_type=run.config.model_type,
         dataset=run.config.dataset,
         size=run.config.size,
-        do_oversampling=False,
+        do_oversampling=run.config.do_oversampling,
         do_class_weights=run.config.do_class_weights,
         optimizer=run.config.optimizer,
         learning_rate=run.config.learning_rate,
@@ -27,6 +27,18 @@ def main(run):
         scheduler=run.config.scheduler,
         epochs=run.config.epochs,
         batch_size=run.config.batch_size,
+        solarize=0,
+        saturation=0,
+        contrast=0,
+        brightness=0,
+        sharpness=0,
+        hue=0,
+        posterization=0,
+        rotation=0,
+        erasing=0,
+        affine=0,
+        crop=0,
+        gaussian_noise=0,
     )
     # Transforms
     transforms_creator = TransformsCreator(parameter_storage)
@@ -55,18 +67,19 @@ if __name__ == "__main__":
         entity=WANDB_ENTITY,
         project=WANDB_PROJECT,
         config={
-            "model_architecture": "vision_transformer",
-            "model_type": "vit_b_16",
+            "model_architecture": "efficient_net",
+            "model_type": "b2",
             "dataset": "HAM_10000",
-            "size": (384, 384),
+            "size": (400, 400),
             "optimizer": "adam",
             "criterion": "cross_entropy",
             "scheduler": "plateau",
-            "learning_rate": 5e-6,
+            "learning_rate": 1e-4,
             "weight_decay": 0,
-            "epochs": 400,
+            "epochs": 300,
             "batch_size": 32,
-            "do_class_weights": True
+            "do_class_weights": True,
+            "do_oversampling": False,
         },
     )
     main(run)

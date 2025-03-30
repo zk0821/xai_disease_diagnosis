@@ -11,7 +11,7 @@ from utils.parameter_storage import ParameterStorage
 def main():
     parameter_storage = ParameterStorage(
         model_architecture="resnet",
-        model_type="resnet18",
+        model_type="resnet50",
         dataset="HAM_10000",
         size=(224, 224),
         do_oversampling=False,

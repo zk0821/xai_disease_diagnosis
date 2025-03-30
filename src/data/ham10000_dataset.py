@@ -22,7 +22,7 @@ class HAM10000Dataset(Dataset):
         label = torch.tensor(int(self.dataframe["type"].iloc[idx]))
         if self.transforms is not None:
             image = self.transforms(image)
-        return image, label
+        return image, label, img_path
 
 
 class HAM10000VerboseDataset(Dataset):
@@ -36,11 +36,7 @@ class HAM10000VerboseDataset(Dataset):
     def __getitem__(self, idx):
         img_path = f"{self.dataframe.path}/images/{self.dataframe.get_dataframe()['image'].iloc[idx]}.jpg"
         image = Image.open(img_path)
-        label = torch.tensor(
-            np.argmax(
-                self.dataframe.get_dataframe().iloc[idx, 1:].to_numpy(dtype="float64")
-            )
-        )
+        label = torch.tensor(np.argmax(self.dataframe.get_dataframe().iloc[idx, 1:].to_numpy(dtype="float64")))
         if self.transforms is not None:
             image = self.transforms(image)
         return img_path, image, label

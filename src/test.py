@@ -27,9 +27,21 @@ def main():
         scheduler=wandb.config.scheduler,
         epochs=wandb.config.epochs,
         batch_size=wandb.config.batch_size,
+        solarize=128,
+        saturation=(0.8, 1.2),
+        contrast=(0.8, 1.2),
+        brightness=(0.8, 1.2),
+        sharpness=1,
+        hue=0.0,
+        posterization=5,
+        rotation=30,
+        erasing=0.2,
+        affine=0.1,
+        crop=(0.7, 1.0),
+        gaussian_noise=0.0,
     )
     # Transforms
-    transforms_creator = TransformsCreator(parameter_storage)
+    transforms_creator = TransformsCreator(parameter_storage, tta=True)
     transforms_creator.create_transforms()
     # Load the dataset
     dataset_loader = DatasetLoader(parameter_storage, transforms=transforms_creator)
@@ -41,7 +53,7 @@ def main():
     # Create the model
     model_handler = ModelHandler(parameter_storage, evaluator)
     model_handler.prepare_model(dataset_loader, data_loader_creator)
-    model_handler.test_model()
+    model_handler.test_model_with_augmentation()
 
 
 if __name__ == "__main__":
@@ -54,19 +66,19 @@ if __name__ == "__main__":
         entity=WANDB_ENTITY,
         project=WANDB_PROJECT,
         config={
-            "name": "clear-oath-472",
+            "name": "ethereal-sweep-50",
             "model_architecture": "efficient_net",
-            "model_type": "b7",
+            "model_type": "b2",
             "dataset": "HAM_10000",
             "size": (400, 400),
             "optimizer": "adam",
             "criterion": "cross_entropy",
-            "scheduler": "step",
-            "learning_rate": 1e-5,
-            "weight_decay": 0,
+            "scheduler": "plateau",
+            "learning_rate": 2e-4,
+            "weight_decay": 1e-4,
             "epochs": 400,
-            "batch_size": 32,
-            "do_class_weights": False
+            "batch_size": 1,
+            "do_class_weights": True,
         },
     )
     main()

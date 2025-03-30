@@ -10,6 +10,8 @@ class CustomResNet(TemplateModel):
     def load_pretrained(self):
         if self.type == "resnet50":
             return torch.hub.load("pytorch/vision", "resnet50", weights="IMAGENET1K_V2")
+        elif self.type == "resnext50":
+            return torch.hub.load("pytorch/vision", "resnext50_32x4d", weights="IMAGENET1K_V2")
         elif self.type == "resnet101":
             return torch.hub.load(
                 "pytorch/vision", "resnet101", weights="IMAGENET1K_V2"

@@ -1,5 +1,5 @@
 class EarlyStoppage:
-    def __init__(self, patience=1, min_delta=0, max_patience=50):
+    def __init__(self, patience=1, min_delta=0.1, max_patience=10):
         self.patience = patience
         self.min_delta = min_delta
         self.max_patience = max_patience
@@ -21,7 +21,7 @@ class EarlyStoppage:
             if self.counter >= self.patience:
                 return True
             elif self.max_counter >= self.max_patience:
-                return True 
+                return True
         else:
             self.max_counter += 1
             if self.max_counter >= self.max_patience:

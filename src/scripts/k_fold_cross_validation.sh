@@ -6,9 +6,10 @@
 #SBATCH --partition=gpu
 #SBATCH --gpus=1
 #SBATCH --time=4-00:00:00
-#SBATCH --output=logs/sweep.out
-#SBATCH --error=logs/sweep.err
-#SBATCH --job-name="Sweep"
+#SBATCH --output=logs/k_fold.out
+#SBATCH --error=logs/k_fold.err
+#SBATCH --job-name="K Fold"
+#SBATCH --exclude=gwn01
 export SSL_CERT_FILE=containers/cacert.pem
 
-srun singularity exec --nv containers/container_old.sif python src/sweep.py
+srun singularity exec --nv containers/container.sif python src/k_fold_cross_validation.py

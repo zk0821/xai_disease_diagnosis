@@ -6,9 +6,7 @@ class DatasetLoader:
 
     def __init__(self, parameter_storage, transforms):
         if parameter_storage.dataset == "HAM_10000":
-            self.full_train_dataframe = HAM10000Dataframe(
-                path="data/ham10000/train", csv_name="groundtruth.csv"
-            )
+            self.full_train_dataframe = HAM10000Dataframe(path="data/ham10000/train", csv_name="groundtruth.csv")
             self.full_train_dataset = HAM10000Dataset(
                 path=self.full_train_dataframe.path,
                 dataframe=self.full_train_dataframe.get_dataframe(),
@@ -22,7 +20,7 @@ class DatasetLoader:
                     self.full_train_dataframe.get_dataframe(),
                     test_size=0.2,
                     random_state=42,
-                    stratify=self.full_train_dataframe.get_dataframe()["type"]
+                    stratify=self.full_train_dataframe.get_dataframe()["type"],
                 )
                 self.train_dataset = HAM10000Dataset(
                     path=self.full_train_dataframe.path,
@@ -46,9 +44,7 @@ class DatasetLoader:
                     transforms=transforms.validation_transforms,
                 )
 
-            self.test_dataframe = HAM10000Dataframe(
-                path="data/ham10000/test", csv_name="groundtruth.csv"
-            )
+            self.test_dataframe = HAM10000Dataframe(path="data/ham10000/test", csv_name="groundtruth.csv")
             self.test_dataset = HAM10000Dataset(
                 path=self.test_dataframe.path,
                 dataframe=self.test_dataframe.get_dataframe(),

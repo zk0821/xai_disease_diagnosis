@@ -16,6 +16,18 @@ class ParameterStorage:
         scheduler,
         epochs,
         batch_size,
+        solarize,
+        saturation,
+        contrast,
+        brightness,
+        sharpness,
+        hue,
+        posterization,
+        rotation,
+        erasing,
+        affine,
+        crop,
+        gaussian_noise,
     ):
         self.name = name
         self.model_architecture = model_architecture
@@ -31,3 +43,15 @@ class ParameterStorage:
         self.scheduler = scheduler
         self.epochs = epochs
         self.batch_size = batch_size
+        self.solarize = solarize
+        self.saturation = saturation
+        self.contrast = contrast
+        self.brightness = brightness
+        self.sharpness = sharpness
+        self.hue = hue
+        self.posterization = posterization
+        self.rotation = rotation
+        self.erasing = erasing
+        self.affine = affine
+        self.crop = crop
+        self.gaussian_noise = gaussian_noise

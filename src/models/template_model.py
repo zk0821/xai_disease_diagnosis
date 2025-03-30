@@ -30,6 +30,7 @@ class TemplateModel(nn.Module, metaclass=abc.ABCMeta):
         return
 
     def forward(self, x):
+        assert self.pretrained_model is not None
         y = self.pretrained_model(x)
         y = self.flatten(y)
         y = self.linear_one(y)
@@ -40,5 +41,10 @@ class TemplateModel(nn.Module, metaclass=abc.ABCMeta):
         return y
 
     def unfreeze_pretrained_layers(self):
+        assert self.pretrained_model is not None
+        for param in self.pretrained_model.parameters():
+            param.requires_grad = True
+
+    def freeze_pretrained_layers(self):
         for param in self.pretrained_model.parameters():
             param.requires_grad = True
