@@ -9,6 +9,7 @@
 #SBATCH --output=logs/sweep.out
 #SBATCH --error=logs/sweep.err
 #SBATCH --job-name="Sweep"
+#SBATCH --exclude=gwn[01-03],gwn10,gwn[04-06],gwn08,wn222,wn224,wn209,wn210,wn211,wn212
 export SSL_CERT_FILE=containers/cacert.pem
 
-srun singularity exec --nv containers/container_old.sif python src/sweep.py
+srun singularity exec --nv containers/container.sif python src/sweep.py

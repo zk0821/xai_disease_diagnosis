@@ -8,7 +8,7 @@ class ParameterStorage:
         dataset,
         size,
         do_oversampling,
-        do_class_weights,
+        class_weights,
         optimizer,
         learning_rate,
         weight_decay,
@@ -28,6 +28,12 @@ class ParameterStorage:
         affine,
         crop,
         gaussian_noise,
+        focal_loss_gamma,
+        class_balance_beta,
+        augmentation_probability,
+        validation_split,
+        augmentation_policy,
+        augmentation_magnitude,
     ):
         self.name = name
         self.model_architecture = model_architecture
@@ -35,7 +41,7 @@ class ParameterStorage:
         self.dataset = dataset
         self.size = size
         self.do_oversampling = do_oversampling
-        self.do_class_weights = do_class_weights
+        self.class_weights = class_weights
         self.optimizer = optimizer
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -55,3 +61,9 @@ class ParameterStorage:
         self.affine = affine
         self.crop = crop
         self.gaussian_noise = gaussian_noise
+        self.focal_loss_gamma = focal_loss_gamma
+        self.class_balance_beta = class_balance_beta
+        self.augmentation_probability = augmentation_probability
+        self.validation_split = validation_split
+        self.augmentation_policy = augmentation_policy
+        self.augmentation_magnitude = augmentation_magnitude

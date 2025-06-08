@@ -3,6 +3,7 @@ import torch.optim as optim
 import torch.nn as nn
 from torchvision.transforms import v2
 
+import cv2
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
@@ -12,6 +13,7 @@ import random
 import csv
 
 from utils.early_stoppage import EarlyStoppage
+from models.loss.custom_loss import FocalLoss, ClassBalancedFocalLoss, ClassBalancedCrossEntropy, LDAMLoss
 
 
 class Trainer:
@@ -48,31 +50,88 @@ class Trainer:
         else:
             raise RuntimeError(f"Unsupported optimizer: {self.parameter_storage.optimizer}")
 
-        if self.parameter_storage.do_class_weights:
-            class_weights = compute_class_weight(
-                class_weight="balanced",
-                classes=np.unique(self.dataset_loader.train_dataframe["type"].to_numpy()),
-                y=self.dataset_loader.train_dataframe["type"].to_numpy(),
+        # Class Weights
+        print(f"Chosen class weights: {self.parameter_storage.class_weights}")
+        if self.parameter_storage.class_weights == "none":
+            cls_num_list = np.array([])
+            per_cls_weights = None
+        elif self.parameter_storage.class_weights == "reweight":
+            # Num samples per class
+            cls_num_list = np.array(
+                [
+                    len(np.where(self.dataset_loader.train_dataframe["type"] == t)[0])
+                    for t in np.unique(self.dataset_loader.train_dataframe["type"])
+                ]
             )
-            class_weights = torch.tensor(class_weights, dtype=torch.float)
-            self.criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.0).to(self.device)
-        else:
-            if self.parameter_storage.criterion == "cross_entropy":
-                self.criterion = nn.CrossEntropyLoss(label_smoothing=0.0).to(self.device)
-            else:
-                raise RuntimeError(f"Unsupported criterion: {self.parameter_storage.criterion}")
+            print(f"Cls num list: {cls_num_list}")
+            # Weights per class
+            beta = 0.9999
+            effective_num = 1.0 - np.power(beta, cls_num_list)
+            per_cls_weights = (1.0 - beta) / np.array(effective_num)
+            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
+            print(f"Weights per class: {per_cls_weights}")
+        elif self.parameter_storage.class_weights == "drw":
+            # Num samples per class
+            cls_num_list = np.array(
+                [
+                    len(np.where(self.dataset_loader.train_dataframe["type"] == t)[0])
+                    for t in np.unique(self.dataset_loader.train_dataframe["type"])
+                ]
+            )
+            print(f"Cls num list: {cls_num_list}")
+            # Weights per class
+            beta = 0.9999
+            effective_num = 1.0 - np.power(beta, cls_num_list)
+            per_cls_weights = (1.0 - beta) / np.array(effective_num)
+            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
+            print(f"Weights per class: {per_cls_weights}")
 
+        # Criterion
+        print(f"Chosen criterion: {self.parameter_storage.criterion}")
+        if self.parameter_storage.criterion == "cross_entropy":
+            self.criterion = nn.CrossEntropyLoss(weight=per_cls_weights).to(self.device)
+        elif self.parameter_storage.criterion == "cb_cross_entropy":
+            _, samples_per_class = np.unique(self.dataset_loader.train_dataframe["type"].to_numpy(), return_counts=True)
+            self.criterion = ClassBalancedCrossEntropy(
+                beta=self.parameter_storage.class_balance_beta, samples_per_class=cls_num_list
+            )
+        elif self.parameter_storage.criterion == "focal_loss":
+            self.criterion = FocalLoss(
+                alpha=per_cls_weights, gamma=self.parameter_storage.focal_loss_gamma, reduction="mean"
+            )
+        elif self.parameter_storage.criterion == "cb_focal_loss":
+            self.criterion = ClassBalancedFocalLoss(
+                beta=self.parameter_storage.class_balance_beta,
+                gamma=self.parameter_storage.focal_loss_gamma,
+                samples_per_class=cls_num_list,
+            )
+        elif self.parameter_storage.criterion == "ldam":
+            self.criterion = LDAMLoss(cls_num_list=cls_num_list, max_m=0.5, s=30, weight=per_cls_weights).to(
+                self.device
+            )
+        else:
+            raise RuntimeError(f"Unsupported criterion: {self.parameter_storage.criterion}")
+
+        # Scheduler
+        print(f"Chosen scheduler: {self.parameter_storage.scheduler}")
         if self.parameter_storage.scheduler == "plateau":
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, mode="min", factor=0.1, patience=3, threshold=1e-4
+                self.optimizer, mode="min", factor=0.1, patience=4, threshold=1e-4, verbose=True
             )
         elif self.parameter_storage.scheduler == "step":
-            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=20, gamma=0.1)
+            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
+        elif self.parameter_storage.scheduler == "multi_step":
+            self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[30, 40, 50, 60], gamma=0.1)
         elif self.parameter_storage.scheduler == "none":
             self.scheduler = None
         else:
             raise RuntimeError(f"Unsupported scheduler: {self.parameter_storage.scheduler}")
-        self.early_stoppage = EarlyStoppage(patience=7, min_delta=0.1, max_patience=11)
+
+        # Early Stoppage
+        self.early_stoppage = EarlyStoppage(patience=12, min_delta=0.1, max_patience=12)
+        # self.early_stoppage = EarlyStoppage(final_epoch=70)
 
     def load_model(self):
         self.model.load_state_dict(
@@ -87,6 +146,7 @@ class Trainer:
         assert self.early_stoppage is not None
         for epoch in range(1, self.epochs + 1):
             # Reset train evaluator at start of epoch
+            # print(f"Epoch {epoch}: LR={self.scheduler.get_last_lr()}")
             self.evaluator.train_evaluator.reset()
             with tqdm(self.data_loader_creator.train_dataloader, unit="batch") as prog:
                 prog.set_description(f"Epoch {epoch}/{self.epochs}")
@@ -95,12 +155,8 @@ class Trainer:
                     prog.update()
                     # Batch data
                     images, labels, paths = data
+                    print("training shape", images.shape)
                     self.evaluator.train_evaluator.record_labels(labels)
-
-                    # MixUp -> linearly add images, but don't change the labels
-                    # if random.uniform(0.0, 1.0) <= 0.3:
-                    #    mixup = v2.MixUp(alpha=random.uniform(0.0, 0.1), num_classes=self.evaluator.num_classes)
-                    #    images, _ = mixup(images, labels)
 
                     images = images.to(self.device)
                     labels = labels.to(self.device)
@@ -108,6 +164,7 @@ class Trainer:
                     # Get outputs
                     self.optimizer.zero_grad()
                     outputs = self.model(images)
+                    print("train outputs", outputs)
 
                     # Calculate loss and perform backpropagation
                     loss = self.criterion(outputs, labels)
@@ -172,7 +229,10 @@ class Trainer:
                     )
                 # Scheduler
                 if self.scheduler is not None:
-                    self.scheduler.step(self.evaluator.validation_evaluator.loss())
+                    if self.parameter_storage.scheduler == "plateau":
+                        self.scheduler.step(self.evaluator.validation_evaluator.loss())
+                    else:
+                        self.scheduler.step()
                 # Model Checkpoint
                 if self.evaluator.validation_evaluator.loss() < self.early_stoppage.get_min_validation_loss():
                     print(
@@ -189,9 +249,7 @@ class Trainer:
 
     def evaluate_model(self, dataloader, evaluator, with_augmentation=False):
         assert self.criterion is not None
-        print("Model evaluation with augmentation:", with_augmentation)
         self.model.eval()
-        # num_augmentations = 16
         # Reset evaluator at start
         evaluator.reset()
         # prediction_csv = open("test_predictions.csv", "w")
@@ -200,10 +258,54 @@ class Trainer:
                 # Batch data
                 images, labels, _ = data
                 evaluator.record_labels(labels)
-                images = images.to(self.device)
-                labels = labels.to(self.device)
 
-                outputs = self.model(images)
+                all_crops = []
+                num_crops = 16
+                for image in images:
+                    crops = []
+                    for index in range(num_crops):
+                        print("multi crop shape:", image.shape)
+                        C, H, W = image.shape
+                        l_region = 1.0
+                        s_region = 0.8
+                        y_n = index // 4
+                        x_n = index % 4
+
+                        # Determine crop region size
+                        if W >= H:
+                            x_region = int(W * l_region)
+                            y_region = int(H * s_region)
+                        else:
+                            x_region = int(W * s_region)
+                            y_region = int(H * l_region)
+
+                        x_region = max(x_region, 224)
+                        y_region = max(y_region, 224)
+
+                        # Center the region
+                        x_cut = (W - x_region) // 2
+                        y_cut = (H - y_region) // 2
+
+                        # Compute crop top-left coordinates
+                        x_loc = x_cut + int(x_n * (x_region - 224) / (4 - 1))
+                        y_loc = y_cut + int(y_n * (y_region - 224) / (4 - 1))
+
+                        # Apply crop
+                        crop = image[:, y_loc : y_loc + 224, x_loc : x_loc + 224]
+                        crops.append(crop)
+                    crops = torch.stack(crops)
+                    all_crops.append(crops)
+                all_crops_batch = torch.cat(all_crops, dim=0)
+                all_crops_batch = all_crops_batch.to(self.device)
+
+                labels = labels.to(self.device)
+                # images = images.to(self.device)
+                # outputs = self.model(images)
+                outputs = self.model(all_crops_batch)
+                outputs = outputs.view(images.shape[0], num_crops, 7)
+                outputs = outputs.mean(dim=1)
+                print("val mean outputs:", outputs)
+
                 _, predictions = outputs.max(dim=1)
                 evaluator.record_predictions(predictions.detach().cpu())
 

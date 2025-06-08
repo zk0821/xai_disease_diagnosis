@@ -39,6 +39,8 @@ def main():
         affine=run.config.affine,
         crop=run.config.crop,
         gaussian_noise=run.config.gaussian_noise,
+        focal_loss_gamma=run.config.focal_loss_gamma,
+        class_balance_beta=run.config.class_balance_beta,
     )
     # Transforms
     transforms_creator = TransformsCreator(parameter_storage)
@@ -65,18 +67,18 @@ if __name__ == "__main__":
     wandb.login(key=WANDB_API_KEY, relogin=True)
     sweep_configuration = {
         "method": "bayes",
-        "name": "efficient-net-b4-data-augmentation-search-and-lr-wd-class-weights",
+        "name": "efficient-net-b2-ldam-plateau-01-increased-augment-probability-06",
         "metric": {"goal": "minimize", "name": "test/loss"},
         "parameters": {
             "dataset": {"values": ["HAM_10000"]},
             "size": {"values": [(400, 400)]},
             "model_architecture": {"values": ["efficient_net"]},
-            "model_type": {"values": ["b4"]},
-            "learning_rate": {"max": 5e-3, "min": 5e-5},
-            "weight_decay": {"max": 1e-3, "min": 1e-6},
+            "model_type": {"values": ["b2"]},
+            "learning_rate": {"max": 5e-4, "min": 5e-5},
+            "weight_decay": {"values": [1e-3]},
             "epochs": {"values": [300]},
             "optimizer": {"values": ["adam"]},
-            "criterion": {"values": ["cross_entropy"]},
+            "criterion": {"values": ["ldam"]},
             "scheduler": {"values": ["plateau"]},
             "batch_size": {"values": [32]},
             "do_class_weights": {"values": [True]},
@@ -93,6 +95,8 @@ if __name__ == "__main__":
             "affine": {"values": [0.1]},
             "crop": {"values": [(0.7, 1.0)]},
             "gaussian_noise": {"values": [0.0]},
+            "focal_loss_gamma": {"values": [2]},
+            "class_balance_beta": {"values": [0.999]},
         },
     }
     sweep_id = wandb.sweep(

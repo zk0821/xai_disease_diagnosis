@@ -1,27 +1,44 @@
 import os
 from torch.utils.data import Dataset
+from torchvision import transforms
 from torchvision.io import read_image
 from PIL import Image
+import cv2
 import pandas as pd
 import numpy as np
 import torch
 
+from data.augmentation_policies import apply_policy
+from data.augmentation_functions import RandomCropInRate
+
 
 class HAM10000Dataset(Dataset):
-    def __init__(self, path, dataframe, transforms=None) -> None:
+    def __init__(self, path, dataframe, transforms=None, policy=None) -> None:
         self.path = path
         self.dataframe = dataframe
         self.transforms = transforms
+        self.policy = policy
 
     def __len__(self) -> int:
         return len(self.dataframe)
 
     def __getitem__(self, idx):
         img_path = f"{self.path}/images/{self.dataframe['image'].iloc[idx]}.jpg"
-        image = Image.open(img_path)
+        # image = Image.open(img_path)
+        image = cv2.imread(img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = torch.from_numpy(np.array(image, dtype=np.uint8))
         label = torch.tensor(int(self.dataframe["type"].iloc[idx]))
+        if self.policy is not None:
+            image = apply_policy(self.policy, image)
+            # Random crop
+            image = Image.fromarray(image.numpy())
+            crop_method = RandomCropInRate(nsize=(224, 224), rand_rate=(0.8, 1.0))
+            image = crop_method(image)
         if self.transforms is not None:
             image = self.transforms(image)
+        transformation = transforms.Compose([transforms.ToTensor()])
+        image = transformation(image)
         return image, label, img_path
 
 
