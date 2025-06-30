@@ -118,12 +118,12 @@ class Trainer:
         print(f"Chosen scheduler: {self.parameter_storage.scheduler}")
         if self.parameter_storage.scheduler == "plateau":
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, mode="min", factor=0.1, patience=4, threshold=1e-4, verbose=True
+                self.optimizer, mode="min", factor=0.1, patience=8, threshold=1e-4
             )
         elif self.parameter_storage.scheduler == "step":
             self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
         elif self.parameter_storage.scheduler == "multi_step":
-            self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[30, 40, 50, 60], gamma=0.1)
+            self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=[30, 40, 50], gamma=0.1)
         elif self.parameter_storage.scheduler == "none":
             self.scheduler = None
         else:
@@ -155,7 +155,6 @@ class Trainer:
                     prog.update()
                     # Batch data
                     images, labels, paths = data
-                    print("training shape", images.shape)
                     self.evaluator.train_evaluator.record_labels(labels)
 
                     images = images.to(self.device)
@@ -164,7 +163,6 @@ class Trainer:
                     # Get outputs
                     self.optimizer.zero_grad()
                     outputs = self.model(images)
-                    print("train outputs", outputs)
 
                     # Calculate loss and perform backpropagation
                     loss = self.criterion(outputs, labels)
@@ -264,7 +262,6 @@ class Trainer:
                 for image in images:
                     crops = []
                     for index in range(num_crops):
-                        print("multi crop shape:", image.shape)
                         C, H, W = image.shape
                         l_region = 1.0
                         s_region = 0.8
@@ -304,7 +301,6 @@ class Trainer:
                 outputs = self.model(all_crops_batch)
                 outputs = outputs.view(images.shape[0], num_crops, 7)
                 outputs = outputs.mean(dim=1)
-                print("val mean outputs:", outputs)
 
                 _, predictions = outputs.max(dim=1)
                 evaluator.record_predictions(predictions.detach().cpu())

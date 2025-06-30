@@ -9,6 +9,11 @@ from models.model_handler import ModelHandler
 import wandb
 from dotenv import load_dotenv
 
+# random seed
+import torch
+import random
+import numpy as np
+
 
 def main(run):
     # Define all necessary parameters
@@ -45,10 +50,20 @@ def main(run):
         validation_split=run.config.validation_split,
         augmentation_policy=run.config.augmentation_policy,
         augmentation_magnitude=run.config.augmentation_magnitude,
+        random_seed=run.config.random_seed
     )
+    # Set the random seeds for reproducibility
+    torch.manual_seed(parameter_storage.random_seed)
+    torch.cuda.manual_seed(parameter_storage.random_seed)
+    torch.cuda.manual_seed_all(parameter_storage.random_seed)
+    random.seed(parameter_storage.random_seed)
+    np.random.seed(parameter_storage.random_seed)
+    # Make GPUs deterministic
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     # Transforms
-    transforms_creator = TransformsCreator(parameter_storage)
-    transforms_creator.create_transforms()
+    # transforms_creator = TransformsCreator(parameter_storage)
+    # transforms_creator.create_transforms()
     # Load the dataset
     dataset_loader = DatasetLoader(parameter_storage)
     # Create the data loaders
@@ -79,7 +94,7 @@ if __name__ == "__main__":
             "size": (224, 224),
             "optimizer": "adam",
             "criterion": "cross_entropy",
-            "scheduler": "none",
+            "scheduler": "multi_step",
             "learning_rate": 2e-4,
             "weight_decay": 1e-4,
             "epochs": 300,
@@ -99,11 +114,12 @@ if __name__ == "__main__":
             "crop": (0.7, 1.0),
             "gaussian_noise": 0.0,
             "focal_loss_gamma": 2,
-            "class_balance_beta": 0.99,
+            "class_balance_beta": 0.999,
             "augmentation_probability": 0.7,
             "validation_split": 0.2,
             "augmentation_policy": "v1_0",
             "augmentation_magnitude": 5,
+            "random_seed": 7620
         },
     )
     main(run)

@@ -38,7 +38,7 @@ class CustomEfficientNet(TemplateModel):
             )
         else:
             raise RuntimeError(
-                'Type "{self.type}" is not supported for model EfficientNet!'
+                f"Type '{self.type}' is not supported for model EfficientNet!"
             )
 
     def remove_final_layer(self):

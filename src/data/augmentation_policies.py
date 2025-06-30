@@ -24,17 +24,21 @@ from data.augmentation_functions import (
     color_casting,
     resize,
     multi_crop,
+    mixup
 )
 
 
 def policy_multi_crop():
-    return {0: [("Multi_crop", 1.0, 1.0)]}
+    return {0: [
+        [("Multi_crop", 1.0, 1.0)]
+    ]}
 
 
 def policy_v1_0(probability=0.7, magnitude=5):
     return {
         # color augment
         0: [
+            [("Mixup", probability, magnitude)],
             [("Vignetting", probability, magnitude)],
             [("Gaussian_noise", probability, magnitude)],
             [("Saturation", probability, magnitude)],
@@ -62,7 +66,7 @@ def policy_v1_0(probability=0.7, magnitude=5):
     }
 
 
-def augmentation_function(augmentation, image, magnitude):
+def augmentation_function(augmentation, image, magnitude, mixup_image):
     if augmentation == "AutoContrast":
         return autocontrast(image)
     elif augmentation == "Equalize":
@@ -109,11 +113,13 @@ def augmentation_function(augmentation, image, magnitude):
         return resize(image, magnitude)
     elif augmentation == "Multi_crop":
         return multi_crop(image, num_crops=16)
+    elif augmentation == "Mixup":
+        return mixup(image, mixup_image, magnitude)
     else:
         raise RuntimeError(f"Unsupported augmentation: {augmentation}")
 
 
-def apply_policy(policy, image):
+def apply_policy(policy, image, mixup_image):
     if policy == "v1_0":
         selected_policy = policy_v1_0()
     elif policy == "multi_crop":
@@ -125,5 +131,5 @@ def apply_policy(policy, image):
         picked_augmentation = random.choice(augmentation_category)
         augmentation, probability, magnitude = picked_augmentation[0]
         if random.random() < probability:
-            augmented_image = augmentation_function(augmentation, augmented_image, magnitude)
+            augmented_image = augmentation_function(augmentation, augmented_image, magnitude, mixup_image)
     return augmented_image

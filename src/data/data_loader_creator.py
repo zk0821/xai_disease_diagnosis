@@ -1,8 +1,14 @@
 from torch.utils.data import DataLoader, SubsetRandomSampler, WeightedRandomSampler
 from torch.utils.data.distributed import DistributedSampler
 import numpy as np
+import random
 import torch
 
+def seed_worker(worker_id):
+    # Required for reproducibility
+    worker_seed = torch.initial_seed() % 2 ** 32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 class DataLoaderCreator:
 
@@ -14,6 +20,9 @@ class DataLoaderCreator:
         self.test_dataloader = None
 
     def create_dataloaders(self):
+        # Torch Generator for reproducibility
+        g = torch.Generator()
+        g.manual_seed(self.parameter_storage.random_seed)
         # Dataloaders
         if self.parameter_storage.do_oversampling:
             print("Oversampling selected: WeightedRandomSampler")
@@ -38,6 +47,8 @@ class DataLoaderCreator:
                 shuffle=False,
                 num_workers=16,
                 sampler=weighted_random_sampler,
+                worker_init_fn=seed_worker,
+                generator=g
             )
         else:
             print("Oversampling selected: None")
@@ -46,6 +57,8 @@ class DataLoaderCreator:
                 batch_size=self.parameter_storage.batch_size,
                 shuffle=True,
                 num_workers=16,
+                worker_init_fn=seed_worker,
+                generator=g
             )
 
         self.validation_dataloader = DataLoader(
@@ -53,10 +66,46 @@ class DataLoaderCreator:
             batch_size=self.parameter_storage.batch_size,
             shuffle=False,
             num_workers=16,
+            worker_init_fn=seed_worker,
+            generator=g
         )
         self.test_dataloader = DataLoader(
             self.dataset_loader.test_dataset,
             batch_size=self.parameter_storage.batch_size,
             shuffle=False,
             num_workers=16,
+            worker_init_fn=seed_worker,
+            generator=g
+        )
+
+    def create_dataloaders_from_ids(self, train_ids, validation_ids):
+        # Torch Generator for reproducibility
+        g = torch.Generator()
+        g.manual_seed(self.parameter_storage.random_seed)
+        # Create dataloaders
+        train_subsampler = SubsetRandomSampler(train_ids)
+        self.train_dataloader = DataLoader(
+            self.dataset_loader.full_train_dataset,
+            batch_size=self.parameter_storage.batch_size,
+            sampler=train_subsampler,
+            num_workers=16,
+            worker_init_fn=seed_worker,
+            generator=g
+        )
+        validation_subsampler = SubsetRandomSampler(validation_ids)
+        self.validation_dataloader = DataLoader(
+            self.dataset_loader.full_train_dataset,
+            batch_size=self.parameter_storage.batch_size,
+            sampler=validation_subsampler,
+            num_workers=16,
+            worker_init_fn=seed_worker,
+            generator=g
+        )
+        self.test_dataloader = DataLoader(
+            self.dataset_loader.test_dataset,
+            batch_size=self.parameter_storage.batch_size,
+            shuffle=False,
+            num_workers=16,
+            worker_init_fn=seed_worker,
+            generator=g
         )

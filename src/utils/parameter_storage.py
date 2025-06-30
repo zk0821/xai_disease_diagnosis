@@ -34,6 +34,7 @@ class ParameterStorage:
         validation_split,
         augmentation_policy,
         augmentation_magnitude,
+        random_seed
     ):
         self.name = name
         self.model_architecture = model_architecture
@@ -67,3 +68,4 @@ class ParameterStorage:
         self.validation_split = validation_split
         self.augmentation_policy = augmentation_policy
         self.augmentation_magnitude = augmentation_magnitude
+        self.random_seed = random_seed

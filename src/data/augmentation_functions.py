@@ -52,6 +52,18 @@ def blend(image1, image2, factor):
     return temp.type(torch.uint8)
 
 
+def mixup(image, image_for_mixup, magnitude):
+    """ mixup the corresponding pixels of image 1 and image 2. """
+    _max = 0.2      # mixed intensity：0.0--0.2,
+    _min = 0.0
+    p = (_max - _min) / g_grade_num
+    factor = random.uniform(_min, _min + p * magnitude) # magnitude is random
+    height, width = image.shape[:2]
+    image2 = cv2.resize(image_for_mixup.numpy(), (width, height))
+    image2 = torch.from_numpy(np.array(image2, dtype=np.uint8))
+    return blend(image, image2, factor)
+
+
 def gaussian_noise(image, magnitude):
     """add Gaussian noise to the image."""
     _max = 0.2  # noise intensity：0.0--0.2,

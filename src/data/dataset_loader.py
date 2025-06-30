@@ -1,5 +1,5 @@
 from data.ham10000_dataset import HAM10000Dataframe, HAM10000Dataset
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 
 
 class DatasetLoader:
@@ -20,12 +20,37 @@ class DatasetLoader:
             self.classes = self.full_train_dataframe.categories.categories.tolist()
             self.num_classes = self.full_train_dataframe.categories.categories.size
 
-            if True:
-                # Validation dataset is created from the train dataset
+            create_validation_from_training = True
+
+            if create_validation_from_training:
+                print("Using validation dataset created from training data")
+                # Validation dataset is created from the train dataset using KFold
+                kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=parameter_storage.random_seed)
+                (train_ids, validation_ids) = next(kfold.split(
+                        self.full_train_dataframe.get_dataframe(),
+                        self.full_train_dataframe.get_dataframe()["type"]
+                ))
+                self.train_dataframe = self.full_train_dataframe.get_dataframe().loc[train_ids]
+                print("train dataframe:", self.train_dataframe)
+                self.train_dataset = HAM10000Dataset(
+                    path=self.full_train_dataframe.path,
+                    dataframe=self.train_dataframe,
+                    transforms=train_transforms,
+                    policy=parameter_storage.augmentation_policy,
+                )
+                self.validation_dataframe = self.full_train_dataframe.get_dataframe().loc[validation_ids]
+                print("validation dataframe:", self.validation_dataframe)
+                self.validation_dataset = HAM10000Dataset(
+                    path=self.full_train_dataframe.path,
+                    dataframe=self.validation_dataframe,
+                    transforms=validation_transforms,
+                    policy="multi_crop",
+                )
+                ''' Using standard train test split function
                 self.train_dataframe, self.validation_dataframe = train_test_split(
                     self.full_train_dataframe.get_dataframe(),
                     test_size=parameter_storage.validation_split,
-                    random_state=42,
+                    random_state=parameter_storage.random_seed,
                     stratify=self.full_train_dataframe.get_dataframe()["type"],
                 )
                 self.train_dataset = HAM10000Dataset(
@@ -40,9 +65,11 @@ class DatasetLoader:
                     transforms=validation_transforms,
                     policy="multi_crop",
                 )
+                '''
             else:
+                print("Using official validation set")
                 # Validation dataset is provided, but is too small to be used
-                self.train_dataframe = self.full_train_dataframe
+                self.train_dataframe = self.full_train_dataframe.get_dataframe()
                 self.train_dataset = self.full_train_dataset
                 self.validation_dataframe = HAM10000Dataframe(
                     path="data/ham10000/validation", csv_name="groundtruth.csv"
@@ -50,7 +77,8 @@ class DatasetLoader:
                 self.validation_dataset = HAM10000Dataset(
                     path=self.validation_dataframe.path,
                     dataframe=self.validation_dataframe.get_dataframe(),
-                    transforms=transforms.validation_transforms,
+                    transforms=validation_transforms,
+                    policy="multi_crop"
                 )
 
             self.test_dataframe = HAM10000Dataframe(path="data/ham10000/test", csv_name="groundtruth.csv")

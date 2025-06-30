@@ -1,0 +1,1 @@
+srun -p dev --container-image nvcr.io#nvidia/pytorch:23.08-py3 --container-save ./containers/container.sqfs sh -c 'pip install torch torchvision torchaudio scikit-image scikit-learn wandb python-dotenv faiss-cpu pytorch-ignite numpy opencv-python'

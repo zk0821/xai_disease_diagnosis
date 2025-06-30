@@ -19,7 +19,7 @@ def main():
         dataset=wandb.config.dataset,
         size=wandb.config.size,
         do_oversampling=False,
-        do_class_weights=wandb.config.do_class_weights,
+        class_weights=wandb.config.class_weights,
         optimizer=wandb.config.optimizer,
         learning_rate=wandb.config.learning_rate,
         weight_decay=wandb.config.weight_decay,
@@ -39,12 +39,18 @@ def main():
         affine=0.1,
         crop=(0.7, 1.0),
         gaussian_noise=0.0,
+        focal_loss_gamma=2,
+        class_balance_beta=0.999,
+        augmentation_probability=0.7,
+        validation_split=0.2,
+        augmentation_policy="v1_0",
+        augmentation_magnitude=5
     )
     # Transforms
     transforms_creator = TransformsCreator(parameter_storage, tta=True)
     transforms_creator.create_transforms()
     # Load the dataset
-    dataset_loader = DatasetLoader(parameter_storage, transforms=transforms_creator)
+    dataset_loader = DatasetLoader(parameter_storage)
     # Create the data loaders
     data_loader_creator = DataLoaderCreator(parameter_storage, dataset_loader)
     data_loader_creator.create_dataloaders()
@@ -53,7 +59,7 @@ def main():
     # Create the model
     model_handler = ModelHandler(parameter_storage, evaluator)
     model_handler.prepare_model(dataset_loader, data_loader_creator)
-    model_handler.test_model_with_augmentation()
+    model_handler.test_model()
 
 
 if __name__ == "__main__":
@@ -66,19 +72,19 @@ if __name__ == "__main__":
         entity=WANDB_ENTITY,
         project=WANDB_PROJECT,
         config={
-            "name": "ethereal-sweep-50",
+            "name": "soft-morning-2930",
             "model_architecture": "efficient_net",
             "model_type": "b2",
             "dataset": "HAM_10000",
-            "size": (400, 400),
+            "size": (224, 224),
             "optimizer": "adam",
             "criterion": "cross_entropy",
-            "scheduler": "plateau",
+            "scheduler": "none",
             "learning_rate": 2e-4,
             "weight_decay": 1e-4,
-            "epochs": 400,
-            "batch_size": 1,
-            "do_class_weights": True,
+            "epochs": 300,
+            "batch_size": 32,
+            "class_weights": "reweight",
         },
     )
     main()

@@ -30,11 +30,16 @@ class HAM10000Dataset(Dataset):
         image = torch.from_numpy(np.array(image, dtype=np.uint8))
         label = torch.tensor(int(self.dataframe["type"].iloc[idx]))
         if self.policy is not None:
-            image = apply_policy(self.policy, image)
-            # Random crop
-            image = Image.fromarray(image.numpy())
-            crop_method = RandomCropInRate(nsize=(224, 224), rand_rate=(0.8, 1.0))
-            image = crop_method(image)
+            image_for_mixup = f"{self.path}/images/{self.dataframe['image'].iloc[np.random.randint(0, len(self.dataframe))]}.jpg"
+            mixup_image = cv2.imread(image_for_mixup)
+            mixup_image = cv2.cvtColor(mixup_image, cv2.COLOR_BGR2RGB)
+            mixup_image = torch.from_numpy(np.array(mixup_image, dtype=np.uint8))
+            image = apply_policy(self.policy, image, mixup_image)
+            if self.policy != "multi_crop":
+                # Random crop
+                image = Image.fromarray(image.numpy())
+                crop_method = RandomCropInRate(nsize=(224, 224), rand_rate=(0.8, 1.0))
+                image = crop_method(image)
         if self.transforms is not None:
             image = self.transforms(image)
         transformation = transforms.Compose([transforms.ToTensor()])
