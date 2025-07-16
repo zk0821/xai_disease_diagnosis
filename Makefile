@@ -1,18 +1,19 @@
-.PHONY: hello container hpc_normalize hpc_ci_net sweep run lrp mean_std test cbir lr_finder k_fold_cross_validation grad_cam
+.PHONY: hello singularity_container enroot_container hpc_normalize sweep run lrp mean_std test cbir lr_finder k_fold_cross_validation grad_cam
 
 hello:
 	echo "Hello World!"
 
-container:
-	chmod u+x containers/create_container.sh
-	./containers/create_container.sh
+singularity_container:
+	chmod u+x containers/create_singularity_container.sh
+	./containers/create_singularity_container.sh
+
+enroot_container:
+	chmod u+x containers/create_enroot_container.sh
+	./containers/create_enroot_container.sh
 
 hpc_normalize:
 	chmod u+x src/scripts/ham_normalize.sh
 	sbatch src/scripts/ham_normalize.sh
-
-hpc_ci_net:
-	sbatch src/scripts/ci_net.sh
 
 sweep:
 	sbatch src/scripts/sweep.sh

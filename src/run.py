@@ -30,6 +30,7 @@ def main(run):
         weight_decay=run.config.weight_decay,
         criterion=run.config.criterion,
         scheduler=run.config.scheduler,
+        early_stoppage=run.config.early_stoppage,
         epochs=run.config.epochs,
         batch_size=run.config.batch_size,
         solarize=run.config.solarize,
@@ -50,6 +51,7 @@ def main(run):
         validation_split=run.config.validation_split,
         augmentation_policy=run.config.augmentation_policy,
         augmentation_magnitude=run.config.augmentation_magnitude,
+        test_time_augmentation=run.config.test_time_augmentation,
         random_seed=run.config.random_seed
     )
     # Set the random seeds for reproducibility
@@ -94,12 +96,13 @@ if __name__ == "__main__":
             "size": (224, 224),
             "optimizer": "adam",
             "criterion": "cross_entropy",
-            "scheduler": "multi_step",
+            "scheduler": "none",
+            "early_stoppage": False,
             "learning_rate": 2e-4,
             "weight_decay": 1e-4,
-            "epochs": 300,
+            "epochs": 70,
             "batch_size": 32,
-            "class_weights": "reweight",
+            "class_weights": "none",
             "do_oversampling": False,
             "solarize": 128,
             "saturation": (0.8, 1.2),
@@ -115,11 +118,12 @@ if __name__ == "__main__":
             "gaussian_noise": 0.0,
             "focal_loss_gamma": 2,
             "class_balance_beta": 0.999,
-            "augmentation_probability": 0.7,
+            "augmentation_probability": 0.0,
             "validation_split": 0.2,
-            "augmentation_policy": "v1_0",
-            "augmentation_magnitude": 5,
-            "random_seed": 7620
+            "augmentation_policy": "none",
+            "augmentation_magnitude": 0,
+            "test_time_augmentation": False,
+            "random_seed": 380
         },
     )
     main(run)

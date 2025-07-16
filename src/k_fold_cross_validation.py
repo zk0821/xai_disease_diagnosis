@@ -4,7 +4,6 @@ import wandb
 
 from sklearn.model_selection import StratifiedKFold
 from utils.parameter_storage import ParameterStorage
-from data.transforms_creator import TransformsCreator
 from data.ham10000_dataset import HAM10000Dataset
 from data.dataset_loader import DatasetLoader
 from data.data_loader_creator import DataLoaderCreator
@@ -17,6 +16,30 @@ import torch
 import random
 import numpy as np
 
+global_large_dummy_tensor = None
+
+def fake_memory_alloc(gb):
+    if not torch.cuda.is_available():
+        print("CUDA is not available. Cannot allocate GPU memory.")
+        return
+    # Calculate the number of elements needed for the desired memory amount
+    # Assuming float32 (4 bytes per element)
+    bytes_per_element = 4
+    total_bytes = gb * 1024 * 1024 * 1024
+    num_elements = total_bytes // bytes_per_element
+
+    try:
+        # Create a single large random tensor on the GPU
+        dummy_tensor = torch.empty((int(num_elements),), device="cuda", dtype=torch.float32)
+        # Initialize it to ensure memory is actually "used" by touching all pages
+        dummy_tensor.uniform_()
+        allocated_mb = dummy_tensor.numel() * bytes_per_element / (1024 * 1024)
+        print(f"Allocated {allocated_mb:.2f} MB of GPU memory with a single tensor.")
+        return dummy_tensor
+    except RuntimeError as e:
+        print(f"Failed to allocate {gb} GB of GPU memory: {e}")
+        print("Consider reducing the amount or checking available VRAM.")
+        return None
 
 def main(run):
     results = []
@@ -33,26 +56,17 @@ def main(run):
         weight_decay=run.config.weight_decay,
         criterion=run.config.criterion,
         scheduler=run.config.scheduler,
+        model_checkpoint=run.config.model_checkpoint,
+        early_stoppage=run.config.early_stoppage,
         epochs=run.config.epochs,
         batch_size=run.config.batch_size,
-        solarize=run.config.solarize,
-        saturation=run.config.saturation,
-        contrast=run.config.contrast,
-        brightness=run.config.brightness,
-        sharpness=run.config.sharpness,
-        hue=run.config.hue,
-        posterization=run.config.posterization,
-        rotation=run.config.rotation,
-        erasing=run.config.erasing,
-        affine=run.config.affine,
-        crop=run.config.crop,
-        gaussian_noise=run.config.gaussian_noise,
         focal_loss_gamma=run.config.focal_loss_gamma,
         class_balance_beta=run.config.class_balance_beta,
-        augmentation_probability=run.config.augmentation_probability,
         validation_split=run.config.validation_split,
-        augmentation_policy=run.config.augmentation_policy,
-        augmentation_magnitude=run.config.augmentation_magnitude,
+        train_augmentation_policy=run.config.train_augmentation_policy,
+        train_augmentation_probability=run.config.train_augmentation_probability,
+        train_augmentation_magnitude=run.config.train_augmentation_magnitude,
+        test_augmentation_policy=run.config.test_augmentation_policy,
         random_seed=run.config.random_seed
     )
     # Set the random seeds for reproducibility
@@ -64,9 +78,6 @@ def main(run):
     # Make GPUs deterministic
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    # Transforms
-    #transforms_creator = TransformsCreator(parameter_storage)
-    #transforms_creator.create_transforms()
     # Load the dataset
     dataset_loader = DatasetLoader(parameter_storage)
     # Create K-Folds
@@ -84,34 +95,27 @@ def main(run):
         dataset_loader.train_dataset = HAM10000Dataset(
             path=dataset_loader.full_train_dataframe.path,
             dataframe=train_dataframe,
-            transforms=None,
-            policy=parameter_storage.augmentation_policy
+            policy=parameter_storage.train_augmentation_policy
         )
         validation_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[validation_ids]
         dataset_loader.validation_dataset = HAM10000Dataset(
             path=dataset_loader.full_train_dataframe.path,
             dataframe=validation_dataframe,
-            transforms=None,
-            policy="multi_crop"
+            policy=parameter_storage.test_augmentation_policy
         )
         # Create the data loaders
         data_loader_creator = DataLoaderCreator(parameter_storage, dataset_loader)
         data_loader_creator.create_dataloaders()
-        #data_loader_creator.create_dataloaders_from_ids(train_ids, validation_ids)
         # Create evaluator
         evaluator = Evaluator(dataset_loader.classes)
         # Create the model
         model_handler = ModelHandler(parameter_storage, evaluator)
         model_handler.prepare_model(dataset_loader, data_loader_creator)
-        model_handler.train_model(log_wandb=False)
-        model_handler.test_model(log_wandb=False)
+        model_handler.train_model(log_wandb=True, fold=f"kfold-{fold}")
+        model_handler.test_model(log_wandb=True, fold=f"kfold-{fold}")
+        # Record metrics
         test_balanced_accuracy = evaluator.test_evaluator.balanced_accuracy()
         results.append(test_balanced_accuracy)
-        wandb.log(
-            {
-                f"kfold-{fold}/test_bmca": test_balanced_accuracy
-            }
-        )
     # Mean, Std, Variance
     mean = np.mean(results)
     std = np.std(results)
@@ -124,8 +128,14 @@ def main(run):
         }
     )
 
+def print_gpu_usage():
+    if torch.cuda.is_available():
+        print(f"Current GPU memory allocated: {torch.cuda.memory_allocated() / (1024**2):.2f} MB")
+        print(f"Max GPU memory allocated: {torch.cuda.max_memory_allocated() / (1024**2):.2f} MB")
 
 if __name__ == "__main__":
+    global_large_dummy_tensor = fake_memory_alloc(20)
+    print_gpu_usage()
     load_dotenv()
     WANDB_API_KEY = os.getenv("WANDB_API_KEY")
     WANDB_ENTITY = os.getenv("WANDB_ENTITY")
@@ -140,32 +150,23 @@ if __name__ == "__main__":
             "dataset": "HAM_10000",
             "size": (224, 224),
             "optimizer": "adam",
-            "criterion": "cross_entropy",
+            "criterion": "ldam",
             "scheduler": "multi_step",
+            "model_checkpoint": True,
+            "early_stoppage": False,
             "learning_rate": 2e-4,
             "weight_decay": 1e-4,
-            "epochs": 300,
+            "epochs": 70,
             "batch_size": 32,
-            "class_weights": "reweight",
+            "class_weights": "drw",
             "do_oversampling": False,
-            "solarize": 128,
-            "saturation": (0.8, 1.2),
-            "contrast": (0.8, 1.2),
-            "brightness": (0.8, 1.2),
-            "sharpness": 1,
-            "hue": 0.0,
-            "posterization": 5,
-            "rotation": 30,
-            "erasing": 0.2,
-            "affine": 0.1,
-            "crop": (0.7, 1.0),
-            "gaussian_noise": 0.0,
             "focal_loss_gamma": 2,
             "class_balance_beta": 0.999,
-            "augmentation_probability": 0.7,
             "validation_split": 0.2,
-            "augmentation_policy": "v1_0",
-            "augmentation_magnitude": 5,
+            "train_augmentation_policy": "v1_0",
+            "train_augmentation_probability": 0.7,
+            "train_augmentation_magnitude": 5,
+            "test_augmentation_policy": "multi_crop",
             "random_seed": 380
         },
     )

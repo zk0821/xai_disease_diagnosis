@@ -1,5 +1,6 @@
 class EarlyStoppage:
-    def __init__(self, patience=1, min_delta=0.1, max_patience=10, final_epoch=None):
+    def __init__(self, enabled, patience=1, min_delta=0.1, max_patience=10, final_epoch=None):
+        self.enabled = enabled
         self.patience = patience
         self.min_delta = min_delta
         self.max_patience = max_patience
@@ -12,6 +13,8 @@ class EarlyStoppage:
         return self.min_validation_loss
 
     def early_stop(self, validation_loss):
+        if not self.enabled:
+            return False
         if self.final_epoch is None:
             if validation_loss < self.min_validation_loss:
                 self.min_validation_loss = validation_loss

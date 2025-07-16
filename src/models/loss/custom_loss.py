@@ -7,21 +7,25 @@ import math
 
 class ClassBalancedCrossEntropy(nn.Module):
 
-    def __init__(self, beta=0.999, samples_per_class=None):
+    def __init__(self, beta=0.999, samples_per_class=None, use_weights=True):
         super(ClassBalancedCrossEntropy, self).__init__()
         self.beta = beta
         self.samples_per_class = samples_per_class
+        self.use_weights = use_weights
 
     def forward(self, x, y):
         batch_size = x.size(0)
         num_classes = x.size(1)
         labels_one_hot = F.one_hot(y, num_classes).float()
 
-        # class balance
-        effective_num = 1.0 - np.power(self.beta, self.samples_per_class)
-        weights = (1.0 - self.beta) / np.array(effective_num)
-        weights /= np.sum(weights) * num_classes
-        weights = torch.tensor(weights, device=x.device).float()
+        if self.use_weights:
+            # class balance
+            effective_num = 1.0 - np.power(self.beta, self.samples_per_class)
+            weights = (1.0 - self.beta) / np.array(effective_num)
+            weights /= np.sum(weights) * num_classes
+            weights = torch.tensor(weights, device=x.device).float()
+        else:
+            weights = None
 
         # cross entropy
         ce_loss = F.cross_entropy(x, y, reduction="mean", weight=weights)
@@ -37,51 +41,45 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
 
     def forward(self, x, y):
-        ce_loss = F.cross_entropy(x, y, reduction="none", weight=self.alpha)
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
-        return focal_loss
+        log_prob = F.log_softmax(x, dim=-1)
+        prob = torch.exp(log_prob)
+        return F.nll_loss(
+            ((1 - prob) ** self.gamma) * log_prob,
+            y,
+            weight=self.alpha,
+            reduction = self.reduction
+        )
 
 
 class ClassBalancedFocalLoss(nn.Module):
 
-    def __init__(self, beta=0.999, gamma=2, samples_per_class=None):
+    def __init__(self, beta=0.999, gamma=2, samples_per_class=None, reduction="mean", use_weights=True):
         super(ClassBalancedFocalLoss, self).__init__()
         self.beta = beta
         self.gamma = gamma
         self.samples_per_class = samples_per_class
+        self.reduction = reduction
+        self.use_weights = use_weights
 
     def forward(self, x, y):
-        batch_size = x.size(0)
-        num_classes = x.size(1)
-        labels_one_hot = F.one_hot(y, num_classes).float()
-        print(f"y:{y}")
         # class balance
-        effective_num = 1.0 - np.power(self.beta, self.samples_per_class)
-        weights = (1.0 - self.beta) / np.array(effective_num)
-        weights /= np.sum(weights) * num_classes
-        weights = torch.tensor(weights, device=x.device).float()
-        print(f"CB Focal Loss Weights: {weights}")
-
+        if self.use_weights:
+            num_classes = x.size(1)
+            effective_num = 1.0 - np.power(self.beta, self.samples_per_class)
+            weights = (1.0 - self.beta) / np.array(effective_num)
+            weights /= np.sum(weights) * num_classes
+            weights = torch.tensor(weights, device=x.device).float()
+        else:
+            weights = None
         # focal loss
-        ce_loss = F.cross_entropy(x, y, reduction="none", weight=weights)
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
-
-        print(f"Focal loss: {focal_loss}")
-
-        return focal_loss
-
-
-class MultiWeightNewLoss(nn.Module):
-
-    def __init__(self, gamma, beta, type, sigmoid):
-        super(MultiWeightNewLoss, self).__init__()
-
-    def forward(self, x, y):
-        labels_one_hot = F.one_hot(y, 7).float().to(x.device())
-        loss = F.binary_cross_entropy_with_logits(input=x, target=labels_one_hot, reduction="none")
-        return loss
+        log_prob = F.log_softmax(x, dim=-1)
+        prob = torch.exp(log_prob)
+        return F.nll_loss(
+            ((1 - prob) ** self.gamma) * log_prob,
+            y,
+            weight=weights,
+            reduction = self.reduction
+        )
 
 
 class LDAMLoss(nn.Module):

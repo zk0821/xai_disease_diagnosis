@@ -13,56 +13,40 @@ from data.augmentation_functions import RandomCropInRate
 
 
 class HAM10000Dataset(Dataset):
-    def __init__(self, path, dataframe, transforms=None, policy=None) -> None:
+    def __init__(self, path, dataframe, policy=None) -> None:
         self.path = path
         self.dataframe = dataframe
-        self.transforms = transforms
         self.policy = policy
 
     def __len__(self) -> int:
         return len(self.dataframe)
 
     def __getitem__(self, idx):
+        # Read the image
         img_path = f"{self.path}/images/{self.dataframe['image'].iloc[idx]}.jpg"
-        # image = Image.open(img_path)
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = torch.from_numpy(np.array(image, dtype=np.uint8))
+        # Read the label
         label = torch.tensor(int(self.dataframe["type"].iloc[idx]))
+        # Apply policy
         if self.policy is not None:
             image_for_mixup = f"{self.path}/images/{self.dataframe['image'].iloc[np.random.randint(0, len(self.dataframe))]}.jpg"
             mixup_image = cv2.imread(image_for_mixup)
             mixup_image = cv2.cvtColor(mixup_image, cv2.COLOR_BGR2RGB)
             mixup_image = torch.from_numpy(np.array(mixup_image, dtype=np.uint8))
             image = apply_policy(self.policy, image, mixup_image)
-            if self.policy != "multi_crop":
-                # Random crop
+            if self.policy != "resize" and self.policy != "multi_crop":
+                # Perform Random Crop with size 224x224
                 image = Image.fromarray(image.numpy())
                 crop_method = RandomCropInRate(nsize=(224, 224), rand_rate=(0.8, 1.0))
                 image = crop_method(image)
-        if self.transforms is not None:
-            image = self.transforms(image)
-        transformation = transforms.Compose([transforms.ToTensor()])
-        image = transformation(image)
+            else:
+                image = Image.fromarray(image.numpy())
+            # Transform image to tensor
+            transformation = transforms.Compose([transforms.ToTensor()])
+            image = transformation(image)
         return image, label, img_path
-
-
-class HAM10000VerboseDataset(Dataset):
-    def __init__(self, dataframe, transforms=None) -> None:
-        self.dataframe = dataframe
-        self.transform = transforms
-
-    def __len__(self) -> int:
-        return len(self.dataframe.get_dataframe())
-
-    def __getitem__(self, idx):
-        img_path = f"{self.dataframe.path}/images/{self.dataframe.get_dataframe()['image'].iloc[idx]}.jpg"
-        image = Image.open(img_path)
-        label = torch.tensor(np.argmax(self.dataframe.get_dataframe().iloc[idx, 1:].to_numpy(dtype="float64")))
-        if self.transforms is not None:
-            image = self.transforms(image)
-        return img_path, image, label
-
 
 class HAM10000Dataframe:
     def __init__(self, path, csv_name):

@@ -539,6 +539,10 @@ def resize(image, min_size=256):
     img_scale = torch.from_numpy(np.array(img_scale, dtype=np.uint8))
     return torch.from_numpy(np.array(img_scale, dtype=np.uint8))
 
+def full_resize(image, size):
+    resized_image = cv2.resize(image.numpy(), size)
+    resized_image = torch.from_numpy(np.array(resized_image, dtype=np.uint8))
+    return resized_image
 
 def color_casting(image, magnitude):
     """Add a bias to a color channel in RGB
@@ -560,7 +564,7 @@ def color_casting(image, magnitude):
             image[:, :, i] = img
     return image
 
-
+'''
 def multi_crop(image, num_crops=16):
     return Image.fromarray(image.numpy())
     crops = []
@@ -595,7 +599,7 @@ def multi_crop(image, num_crops=16):
         crop = image[:, y_loc : y_loc + 224, x_loc : x_loc + 224]
         crops.append(crop)
     return crops
-
+'''
 
 class RandomCropInRate(object):
     """random crop

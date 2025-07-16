@@ -1,6 +1,7 @@
 # Data
 data/ham10000/
 data/8_class_ham10000/
+data/isic2018/
 
 # Logs
 logs/
@@ -12,7 +13,8 @@ logs/
 .pytest_cache/
 
 # Singularity Container
-containers/container.sif
+containers/enroot_container.sqfs
+containers/singularity_container.sif
 
 # Model weights
 models/**

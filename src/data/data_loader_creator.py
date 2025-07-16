@@ -77,35 +77,3 @@ class DataLoaderCreator:
             worker_init_fn=seed_worker,
             generator=g
         )
-
-    def create_dataloaders_from_ids(self, train_ids, validation_ids):
-        # Torch Generator for reproducibility
-        g = torch.Generator()
-        g.manual_seed(self.parameter_storage.random_seed)
-        # Create dataloaders
-        train_subsampler = SubsetRandomSampler(train_ids)
-        self.train_dataloader = DataLoader(
-            self.dataset_loader.full_train_dataset,
-            batch_size=self.parameter_storage.batch_size,
-            sampler=train_subsampler,
-            num_workers=16,
-            worker_init_fn=seed_worker,
-            generator=g
-        )
-        validation_subsampler = SubsetRandomSampler(validation_ids)
-        self.validation_dataloader = DataLoader(
-            self.dataset_loader.full_train_dataset,
-            batch_size=self.parameter_storage.batch_size,
-            sampler=validation_subsampler,
-            num_workers=16,
-            worker_init_fn=seed_worker,
-            generator=g
-        )
-        self.test_dataloader = DataLoader(
-            self.dataset_loader.test_dataset,
-            batch_size=self.parameter_storage.batch_size,
-            shuffle=False,
-            num_workers=16,
-            worker_init_fn=seed_worker,
-            generator=g
-        )

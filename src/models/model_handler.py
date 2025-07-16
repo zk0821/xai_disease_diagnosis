@@ -47,16 +47,11 @@ class ModelHandler:
         self.trainer = Trainer(self.parameter_storage, self.model, dataset_loader, data_loader_creator, self.evaluator)
         self.trainer.prepare_model()
 
-    def train_model(self, log_wandb=True):
+    def train_model(self, log_wandb=True, fold=None):
         assert self.trainer is not None
-        self.trainer.train_model(log_wandb=log_wandb)
+        self.trainer.train_model(log_wandb=log_wandb, fold=fold)
 
-    def test_model(self, log_wandb=True):
+    def test_model(self, log_wandb=True, fold=None):
         assert self.trainer is not None
         self.trainer.load_model()
-        self.trainer.test_model(with_augmentation=False, log_wandb=log_wandb)
-
-    def test_model_with_augmentation(self, log_wandb=True):
-        assert self.trainer is not None
-        self.trainer.load_model()
-        self.trainer.test_model(with_augmentation=True, log_wandb=log_wandb)
+        self.trainer.test_model(log_wandb=log_wandb, fold=fold)
