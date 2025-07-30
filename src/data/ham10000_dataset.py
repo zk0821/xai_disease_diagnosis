@@ -31,7 +31,9 @@ class HAM10000Dataset(Dataset):
         label = torch.tensor(int(self.dataframe["type"].iloc[idx]))
         # Apply policy
         if self.policy is not None:
-            image_for_mixup = f"{self.path}/images/{self.dataframe['image'].iloc[np.random.randint(0, len(self.dataframe))]}.jpg"
+            image_for_mixup = (
+                f"{self.path}/images/{self.dataframe['image'].iloc[np.random.randint(0, len(self.dataframe))]}.jpg"
+            )
             mixup_image = cv2.imread(image_for_mixup)
             mixup_image = cv2.cvtColor(mixup_image, cv2.COLOR_BGR2RGB)
             mixup_image = torch.from_numpy(np.array(mixup_image, dtype=np.uint8))
@@ -47,6 +49,7 @@ class HAM10000Dataset(Dataset):
             transformation = transforms.Compose([transforms.ToTensor()])
             image = transformation(image)
         return image, label, img_path
+
 
 class HAM10000Dataframe:
     def __init__(self, path, csv_name):

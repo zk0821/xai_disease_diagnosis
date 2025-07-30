@@ -1,22 +1,17 @@
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from torchvision.transforms import v2
 
-import cv2
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
 from tqdm import tqdm
-import json
 import wandb
-import random
-import csv
 
 from utils.early_stoppage import EarlyStoppage
 from utils.model_checkpoint import ModelCheckpoint
-from models.loss.custom_loss import FocalLoss, ClassBalancedFocalLoss, ClassBalancedCrossEntropy, LDAMLoss
+from models.loss.custom_loss import FocalLoss, LDAMLoss, LOWLoss
 
-DRW_EPOCH=20
+DRW_EPOCH = 20
 
 
 class Trainer:
@@ -35,10 +30,10 @@ class Trainer:
         # class weights
         self.cls_num_list = None
         self.per_cls_weights = None
-        self.use_weights = False
 
     def define_optimizer(self):
         print(f"Chosen 'optimizer' option: {self.parameter_storage.optimizer}")
+        print(f"Chosen 'weight_decay' option: {self.parameter_storage.weight_decay}")
         if self.parameter_storage.optimizer == "adam":
             self.optimizer = optim.Adam(
                 self.model.parameters(),
@@ -54,8 +49,7 @@ class Trainer:
         else:
             raise RuntimeError(f"Unsupported 'optimizer' option: {self.parameter_storage.optimizer}")
 
-    def define_class_weights(self, curr_epoch):
-        # Class Weights
+    def define_class_weights(self):
         print(f"Chosen 'class_weights' option: {self.parameter_storage.class_weights}")
         cls_num_list = np.array(
             [
@@ -63,58 +57,59 @@ class Trainer:
                 for t in np.unique(self.dataset_loader.train_dataframe["type"])
             ]
         )
-        if self.parameter_storage.class_weights == "none":
+        if self.parameter_storage.class_weights == "none" or self.parameter_storage.class_weights == "weighted_sampler":
             per_cls_weights = None
-            self.use_weights = False
-        elif self.parameter_storage.class_weights == "reweight":
-            self.use_weights = True
-            # Weights per class
+        elif self.parameter_storage.class_weights == "ins":
+            per_cls_weights = 1.0 / cls_num_list
+            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
+        elif self.parameter_storage.class_weights == "isns":
+            per_cls_weights = 1.0 / np.sqrt(cls_num_list)
+            per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
+        elif self.parameter_storage.class_weights == "ens":
             beta = 0.9999
             effective_num = 1.0 - np.power(beta, cls_num_list)
             per_cls_weights = (1.0 - beta) / np.array(effective_num)
             per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
             per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
-        elif self.parameter_storage.class_weights == "drw":
-            # Weights per class
-            if curr_epoch < DRW_EPOCH:
-                self.use_weights = False
-                per_cls_weights = None
-            else:
-                self.use_weights = True
-                beta = 0.9999
-                effective_num = 1.0 - np.power(beta, cls_num_list)
-                per_cls_weights = (1.0 - beta) / np.array(effective_num)
-                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
-                per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
+        elif self.parameter_storage.class_weights == "balanced":
+            per_cls_weights = compute_class_weight(
+                "balanced",
+                classes=np.unique(self.dataset_loader.train_dataframe["type"]),
+                y=self.dataset_loader.train_dataframe["type"],
+            )
+            per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
         else:
             raise RuntimeError(f"Unsupported 'class_weights' option: {self.parameter_storage.class_weights}")
         self.cls_num_list = cls_num_list
         self.per_cls_weights = per_cls_weights
 
+    def define_weight_strategy(self, curr_epoch):
+        print(f"Chosen 'weight_strategy' option: {self.parameter_storage.weight_strategy}")
+        if self.parameter_storage.weight_strategy == "constant":
+            pass
+        elif self.parameter_storage.weight_strategy == "deferred":
+            if curr_epoch < DRW_EPOCH:
+                self.per_cls_weights = None
+            else:
+                pass
+        else:
+            raise RuntimeError(f"Unsupported 'weight_strategy' option: {self.parameter_storage.weight_strategy}")
+
     def define_criterion(self):
-       # Criterion
+        # Criterion
         print(f"Chosen 'criterion' option: {self.parameter_storage.criterion}")
         if self.parameter_storage.criterion == "cross_entropy":
-            self.criterion = nn.CrossEntropyLoss(weight=self.per_cls_weights).to(self.device)
-        elif self.parameter_storage.criterion == "cb_cross_entropy":
-            self.criterion = ClassBalancedCrossEntropy(
-                beta=self.parameter_storage.class_balance_beta, samples_per_class=self.cls_num_list, use_weights=self.use_weights
-            )
+            self.criterion = nn.CrossEntropyLoss(weight=self.per_cls_weights)
         elif self.parameter_storage.criterion == "focal_loss":
             self.criterion = FocalLoss(
-                alpha=self.per_cls_weights, gamma=self.parameter_storage.focal_loss_gamma, reduction="mean"
-            )
-        elif self.parameter_storage.criterion == "cb_focal_loss":
-            self.criterion = ClassBalancedFocalLoss(
-                beta=self.parameter_storage.class_balance_beta,
-                gamma=self.parameter_storage.focal_loss_gamma,
-                samples_per_class=self.cls_num_list,
-                use_weights=self.use_weights
+                weight=self.per_cls_weights, gamma=self.parameter_storage.focal_loss_gamma, reduction="mean"
             )
         elif self.parameter_storage.criterion == "ldam":
-            self.criterion = LDAMLoss(cls_num_list=self.cls_num_list, max_m=0.5, s=30, weight=self.per_cls_weights).to(
-                self.device
-            )
+            self.criterion = LDAMLoss(cls_num_list=self.cls_num_list, weight=self.per_cls_weights, max_m=0.5, s=30)
+        elif self.parameter_storage.criterion == "low":
+            self.criterion = LOWLoss(weight=self.per_cls_weights)
         else:
             raise RuntimeError(f"Unsupported 'criterion' option: {self.parameter_storage.criterion}")
 
@@ -142,11 +137,14 @@ class Trainer:
         self.model.to(self.device)
         # Prepare learning strategy
         self.define_optimizer()
-        self.define_class_weights(0)
+        self.define_class_weights()
+        self.define_weight_strategy(curr_epoch=0)
         self.define_criterion()
         self.define_scheduler()
         self.model_checkpoint = ModelCheckpoint(enabled=self.parameter_storage.model_checkpoint, use_loss=False)
-        self.early_stoppage = EarlyStoppage(enabled=self.parameter_storage.early_stoppage, patience=12, min_delta=0.1, max_patience=12)
+        self.early_stoppage = EarlyStoppage(
+            enabled=self.parameter_storage.early_stoppage, patience=12, min_delta=0.1, max_patience=12
+        )
 
     def load_model(self):
         self.model.load_state_dict(
@@ -163,8 +161,9 @@ class Trainer:
             # Reset train evaluator at start of epoch
             self.evaluator.train_evaluator.reset()
             # If Deferred-Reweighting re-calculate weights and re-define criterion
-            if self.parameter_storage.class_weights == "drw":
-                self.define_class_weights(epoch)
+            if self.parameter_storage.weight_strategy == "deferred":
+                self.define_class_weights()
+                self.define_weight_strategy(curr_epoch=epoch)
                 self.define_criterion()
             with tqdm(self.data_loader_creator.train_dataloader, unit="batch") as prog:
                 prog.set_description(f"Epoch {epoch}/{self.epochs}")
@@ -269,7 +268,9 @@ class Trainer:
                     else:
                         self.scheduler.step()
                 # Model Checkpoint
-                if self.model_checkpoint.save_checkpoint(self.evaluator.validation_evaluator.loss(), self.evaluator.validation_evaluator.balanced_accuracy()):
+                if self.model_checkpoint.save_checkpoint(
+                    self.evaluator.validation_evaluator.loss(), self.evaluator.validation_evaluator.balanced_accuracy()
+                ):
                     print(
                         f"[Epoch {epoch}] Validation Loss={self.evaluator.validation_evaluator.loss()}, Validation Balanced Accuracy={self.evaluator.validation_evaluator.balanced_accuracy()}. Saving model.."
                     )
@@ -352,7 +353,8 @@ class Trainer:
     def test_model(self, log_wandb=True, fold=None):
         # First test on the validation set
         self.evaluate_model(
-            self.data_loader_creator.validation_dataloader, self.evaluator.validation_evaluator,
+            self.data_loader_creator.validation_dataloader,
+            self.evaluator.validation_evaluator,
         )
         if log_wandb:
             if fold is not None:
@@ -466,6 +468,8 @@ class Trainer:
             report_table.append(cols)
         if log_wandb:
             if fold is not None:
-                wandb.log({f"{fold}/test/classification_report": wandb.Table(data=report_table, columns=report_columns)})
+                wandb.log(
+                    {f"{fold}/test/classification_report": wandb.Table(data=report_table, columns=report_columns)}
+                )
             else:
                 wandb.log({"test/classification_report": wandb.Table(data=report_table, columns=report_columns)})

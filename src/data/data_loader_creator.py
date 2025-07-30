@@ -4,11 +4,13 @@ import numpy as np
 import random
 import torch
 
+
 def seed_worker(worker_id):
     # Required for reproducibility
-    worker_seed = torch.initial_seed() % 2 ** 32
+    worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
+
 
 class DataLoaderCreator:
 
@@ -24,7 +26,7 @@ class DataLoaderCreator:
         g = torch.Generator()
         g.manual_seed(self.parameter_storage.random_seed)
         # Dataloaders
-        if self.parameter_storage.do_oversampling:
+        if self.parameter_storage.class_weights == "weighted_sampler":
             print("Oversampling selected: WeightedRandomSampler")
             class_sample_count = np.array(
                 [
@@ -48,7 +50,7 @@ class DataLoaderCreator:
                 num_workers=16,
                 sampler=weighted_random_sampler,
                 worker_init_fn=seed_worker,
-                generator=g
+                generator=g,
             )
         else:
             print("Oversampling selected: None")
@@ -58,7 +60,7 @@ class DataLoaderCreator:
                 shuffle=True,
                 num_workers=16,
                 worker_init_fn=seed_worker,
-                generator=g
+                generator=g,
             )
 
         self.validation_dataloader = DataLoader(
@@ -67,7 +69,7 @@ class DataLoaderCreator:
             shuffle=False,
             num_workers=16,
             worker_init_fn=seed_worker,
-            generator=g
+            generator=g,
         )
         self.test_dataloader = DataLoader(
             self.dataset_loader.test_dataset,
@@ -75,5 +77,5 @@ class DataLoaderCreator:
             shuffle=False,
             num_workers=16,
             worker_init_fn=seed_worker,
-            generator=g
+            generator=g,
         )

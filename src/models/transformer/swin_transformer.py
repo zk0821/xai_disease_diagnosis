@@ -3,12 +3,19 @@ import torch.nn as nn
 
 from models.template_model import TemplateModel
 
+
 class CustomSwinTransformer(TemplateModel):
     def __init__(self, type, num_classes):
         super().__init__(type, num_classes)
 
     def load_pretrained(self):
-        if self.type == "swin_v2_t":
+        if self.type == "swin_t":
+            return torch.hub.load("pytorch/vision", "swin_t", weights="IMAGENET1K_V1")
+        elif self.type == "swin_s":
+            return torch.hub.load("pytorch/vision", "swin_s", weights="IMAGENET1K_V1")
+        elif self.type == "swin_b":
+            return torch.hub.load("pytorch/vision", "swin_b", weights="IMAGENET1K_V1")
+        elif self.type == "swin_v2_t":
             return torch.hub.load("pytorch/vision", "swin_v2_t", weights="IMAGENET1K_V1")
         elif self.type == "swin_v2_s":
             return torch.hub.load("pytorch/vision", "swin_v2_s", weights="IMAGENET1K_V1")

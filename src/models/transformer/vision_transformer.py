@@ -3,19 +3,22 @@ import torch.nn as nn
 
 from models.template_model import TemplateModel
 
+
 class CustomVisionTransformer(TemplateModel):
     def __init__(self, type, num_classes):
         super().__init__(type, num_classes)
 
     def load_pretrained(self):
         if self.type == "vit_b_16":
-            return torch.hub.load(
-                "pytorch/vision", "vit_b_16", weights="IMAGENET1K_SWAG_E2E_V1"
-            )
+            return torch.hub.load("pytorch/vision", "vit_b_16", weights="IMAGENET1K_V1")
+        elif self.type == "vit_b_32":
+            return torch.hub.load("pytorch/vision", "vit_b_32", weights="IMAGENET1K_V1")
         elif self.type == "vit_l_16":
-            return torch.hub.load(
-                "pytorch/vision", "vit_l_16", weights="IMAGENET1K_SWAG_E2E_V1"
-            )
+            return torch.hub.load("pytorch/vision", "vit_l_16", weights="IMAGENET1K_V1")
+        elif self.type == "vit_l_32":
+            return torch.hub.load("pytorch/vision", "vit_l_32", weights="IMAGENET1K_V1")
+        elif self.type == "vit_h_14":
+            return torch.hub.load("pytorch/vision", "vit_h_14", weights="IMAGENET1K_SWAG_E2E_V1")
         else:
             raise RuntimeError(f"Type {self.type} is not supported for model VisionTransformer!")
 

@@ -61,12 +61,21 @@ Organize the dataset as shown below:
             └── groundtruth.csv
 ```
 
-### Setting up the Singularity Container
-Before we can run the scripts we need to prepare the environment where these scripts will be run. For this we will be using **singularity containers**. We will be using a Docker Pytorch image as our base.
+### Setting up the Container
+Before we can run the scripts we need to prepare the environment where these scripts will be run. For this we can choose between two options:
+- Singularity Container
+- Enroot Container
+
+We will be using a Pytorch Container image as our base.
 
 To create the container please run the following command:
+- Singularity Container
 ```
-make container
+make singularity_container
+```
+- Enroot Container
+```
+make enroot_container
 ```
 
 This should create a **container.sif** file inside **containers** folder.
@@ -95,6 +104,22 @@ Please refer to src/models/model_handler and src/models/cnn/ for available model
 ### Running our first script
 At this point we are ready to schedule our first job.
 
+Scripts can be run using `make` command. The `make` command will execute a similarly named script, usually placed in `src/scripts`.
+
+A modification is necessary when running on:
+- Singularity
+```
+srun singularity exec --nv containers/singularity_container.sif python src/<script>.py
+```
+- Enroot
+```
+srun \
+    --container-image=./containers/gradcam_enroot_container.sqfs \
+    --container-mounts ${PWD}:${PWD} \
+    --container-workdir ${PWD} \
+    bash -c "python src/<script>.py"
+```
+
 In this example we will be scheduling a simple **Run** job, which will train a CNN or Transformer using the parameters defined inside the file. After the training is complete the model is evaluated on the test dataset.
 
 To execute the **Run** script please run the following command:
@@ -103,6 +128,23 @@ make run
 ```
 
 This will schedule a SLURM job and you can track the progress using Weights & Biases, or observe run.out and run.err files inside **logs** folder.
+
+### GradCAM
+
+For now GradCAM is setup to use Ensemble model:
+- EfficientNet V2
+- ConvNeXt
+- SwinTransformer
+
+The GradCAM is composed of an average of the final feature layer in each of the models comprising the ensemble.
+
+To run GradCAM on an image run:
+```
+make grad_cam
+```
+
+GradCAM will be performed on the image saved in variable `image_name` in `src/grad_cam.py`. The results are saved to folder `grad_cam/<image_name>`.
+
 
 ### Overview of Scripts
 - cbir: Content Based Image Retrieval; loads an existing model and performs CBIR on an example image (XAI: explanations with examples)

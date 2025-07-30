@@ -3,45 +3,18 @@ import torch.nn as nn
 from torchvision import transforms
 import cv2
 import numpy as np
+import os
 import random
+from collections import OrderedDict
 from PIL import Image
 from utils.parameter_storage import ParameterStorage
 from data.dataset_loader import DatasetLoader
 from data.data_loader_creator import DataLoaderCreator
 from models.cnn.efficientnet_model import CustomEfficientNet
+from models.ensemble.ensemble import EnsembleModel
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 
-
-global_large_dummy_tensor = None
-
-def fake_memory_alloc(gb):
-    if not torch.cuda.is_available():
-        print("CUDA is not available. Cannot allocate GPU memory.")
-        return
-    # Calculate the number of elements needed for the desired memory amount
-    # Assuming float32 (4 bytes per element)
-    bytes_per_element = 4
-    total_bytes = gb * 1024 * 1024 * 1024
-    num_elements = total_bytes // bytes_per_element
-
-    try:
-        # Create a single large random tensor on the GPU
-        dummy_tensor = torch.empty((int(num_elements),), device="cuda", dtype=torch.float32)
-        # Initialize it to ensure memory is actually "used" by touching all pages
-        dummy_tensor.uniform_()
-        allocated_mb = dummy_tensor.numel() * bytes_per_element / (1024 * 1024)
-        print(f"Allocated {allocated_mb:.2f} MB of GPU memory with a single tensor.")
-        return dummy_tensor
-    except RuntimeError as e:
-        print(f"Failed to allocate {gb} GB of GPU memory: {e}")
-        print("Consider reducing the amount or checking available VRAM.")
-        return None
-
-def print_gpu_usage():
-    if torch.cuda.is_available():
-        print(f"Current GPU memory allocated: {torch.cuda.memory_allocated() / (1024**2):.2f} MB")
-        print(f"Max GPU memory allocated: {torch.cuda.max_memory_allocated() / (1024**2):.2f} MB")
 
 def calculate_iou_binary_masks(mask1: np.ndarray, mask2: np.ndarray) -> float:
     """
@@ -86,36 +59,42 @@ def calculate_iou_binary_masks(mask1: np.ndarray, mask2: np.ndarray) -> float:
         iou = intersection / union
         return iou
 
+
+def remove_module_prefix(state_dict):
+    new_state_dict = OrderedDict()
+    for k, v in state_dict.items():
+        if k.startswith("module."):
+            new_state_dict[k[7:]] = v  # remove 'module.' prefix
+        else:
+            new_state_dict[k] = v
+    return new_state_dict
+
+
 def main():
-    print_gpu_usage()
-    global_large_dummy_tensor = fake_memory_alloc(10)
-    print_gpu_usage()
     # Parameter storage
     parameter_storage = ParameterStorage(
-        name="Test GradCAM",
-        model_architecture="efficient_net",
-        model_type="b2",
+        name="driven-silence-3518-fold-0-fold-1-fold-2-fold-3-fold-4",
+        model_architecture="ensemble",
+        model_type="all",
         dataset="HAM_10000",
         size=(224, 224),
-        do_oversampling=False,
-        class_weights="none",
+        class_weights="balanced",
+        weight_strategy="deferred",
         optimizer="adam",
-        learning_rate=2e-4,
+        learning_rate=0.03,
         weight_decay=0,
         criterion="cross_entropy",
-        scheduler='none',
+        scheduler="none",
         model_checkpoint=True,
         early_stoppage=False,
-        epochs=70,
-        batch_size=64,
+        epochs=50,
+        batch_size=32,
         focal_loss_gamma=2,
-        class_balance_beta=0.999,
-        validation_split=0.2,
         train_augmentation_policy="resize",
         train_augmentation_probability=0,
         train_augmentation_magnitude=0,
         test_augmentation_policy="resize",
-        random_seed=380
+        random_seed=2025,
     )
     # Set the random seeds for reproducibility
     torch.manual_seed(parameter_storage.random_seed)
@@ -132,15 +111,29 @@ def main():
     data_loader_creator = DataLoaderCreator(parameter_storage, dataset_loader)
     data_loader_creator.create_dataloaders()
     # Create the model
-    model = CustomEfficientNet("b2", dataset_loader.num_classes)
-    target_layers = [model.pretrained_model.features[-1]]
+    model = EnsembleModel(dataset_loader.num_classes)
+    checkpoint = torch.load(
+        f"models/{parameter_storage.model_architecture}/{parameter_storage.model_type}/{parameter_storage.name}.pth"
+    )
+    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+    state_dict = remove_module_prefix(state_dict)
+    model.load_state_dict(state_dict)
+    target_layers = [
+        model.efficient_net_v2.pretrained_model.features[-1],
+        model.conv_next.pretrained_model.features[-1],
+        model.swin_transformer.pretrained_model.features[-1],
+    ]
+    model.eval()
     with GradCAM(model=model, target_layers=target_layers) as cam:
-        #for _, data in enumerate(data_loader_creator.test_dataloader):
+        # for _, data in enumerate(data_loader_creator.test_dataloader):
         # Selected image
         selected_image = 0
         # Batch data
-#        images, labels, img_path = data
-        img_path = "data/isic2018/segmentation/images/ISIC_0012236.jpg"
+        #        images, labels, img_path = data
+        data_path = "data/ham10000/train/images/"
+        image_name = "ISIC_0024307"
+        image_type = ".jpg"
+        img_path = data_path + image_name + image_type
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, (224, 224))
@@ -148,29 +141,36 @@ def main():
         transformation = transforms.Compose([transforms.ToTensor()])
         image = transformation(image)
         images = torch.unsqueeze(image, 0)
-        print("image:", image.shape)
-       # print("Selected image:", img_path[selected_image])
-       # print("images shape:", images.shape)
         # GradCAM
         grayscale_cam = cam(input_tensor=images)
         img = images[selected_image, :]
-        print("image shape", img.shape)
         rgb_image = img.permute(1, 2, 0).numpy()
-        print("rgb image:", rgb_image)
         rgb_image_to_save = (rgb_image * 255).astype(np.uint8)
-        print("rgb image to save:", rgb_image_to_save)
         rgb_image_to_save = Image.fromarray(rgb_image_to_save)
-        rgb_image_to_save.save("test_image.png")
+        # Create structure to save files
+        save_path = "grad_cam/"
+        save = save_path + image_name
+        if os.path.exists(save) and os.path.isdir(save):
+            for filename in os.listdir(save):
+                file_path = os.path.join(save, filename)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+        else:
+            os.makedirs(save)
+        rgb_image_to_save.save(os.path.join(save, "rgb_image.png"))
         grayscale_image = grayscale_cam[selected_image, :]
+        """
         grayscale_image[grayscale_image < 0.5] = 0
         grayscale_image[grayscale_image >= 0.5] = 1
         print("grayscale image:", grayscale_image)
+        """
         grayscale = Image.fromarray(grayscale_image * 255)
-        grayscale.convert("L").save("grayscale_gradcam.png")
+        grayscale.convert("L").save(os.path.join(save, "grayscale_gradcam.png"))
         # Visualize
         visualization = show_cam_on_image(rgb_image, grayscale_image, use_rgb=True)
         cam_pil_image = Image.fromarray(visualization)
-        cam_pil_image.save("grad_cam_image.png")
+        cam_pil_image.save(os.path.join(save, "grad_cam_image.png"))
+        """
         # Groundtruth segmentation
         segmentation_path = "data/isic2018/segmentation/groundtruth/ISIC_0012236_segmentation.png"
         segmentation_image = cv2.imread(segmentation_path, cv2.IMREAD_GRAYSCALE)
@@ -178,6 +178,7 @@ def main():
         print("segmentation_image:", segmentation_image)
         iou = calculate_iou_binary_masks(grayscale_image, segmentation_image)
         print("iou:", iou)
+        """
 
 
 if __name__ == "__main__":
