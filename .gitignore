@@ -2,6 +2,7 @@
 data/ham10000/
 data/8_class_ham10000/
 data/isic2018/
+data/chest_xray/
 
 # GradCAM
 gradcam/

@@ -4,7 +4,8 @@ import wandb
 
 from sklearn.model_selection import StratifiedKFold
 from utils.parameter_storage import ParameterStorage
-from data.ham10000_dataset import HAM10000Dataset
+from data.chest_dataset import ChestDataset
+from data.isic_dataset import ISICDataset
 from data.dataset_loader import DatasetLoader
 from data.data_loader_creator import DataLoaderCreator
 from evaluation.evaluator import Evaluator
@@ -15,32 +16,6 @@ from dotenv import load_dotenv
 import torch
 import random
 import numpy as np
-
-global_large_dummy_tensor = None
-
-
-def fake_memory_alloc(gb):
-    if not torch.cuda.is_available():
-        print("CUDA is not available. Cannot allocate GPU memory.")
-        return
-    # Calculate the number of elements needed for the desired memory amount
-    # Assuming float32 (4 bytes per element)
-    bytes_per_element = 4
-    total_bytes = gb * 1024 * 1024 * 1024
-    num_elements = total_bytes // bytes_per_element
-
-    try:
-        # Create a single large random tensor on the GPU
-        dummy_tensor = torch.empty((int(num_elements),), device="cuda", dtype=torch.float32)
-        # Initialize it to ensure memory is actually "used" by touching all pages
-        dummy_tensor.uniform_()
-        allocated_mb = dummy_tensor.numel() * bytes_per_element / (1024 * 1024)
-        print(f"Allocated {allocated_mb:.2f} MB of GPU memory with a single tensor.")
-        return dummy_tensor
-    except RuntimeError as e:
-        print(f"Failed to allocate {gb} GB of GPU memory: {e}")
-        print("Consider reducing the amount or checking available VRAM.")
-        return None
 
 
 def main(run):
@@ -95,17 +70,30 @@ def main(run):
         parameter_storage.name = f"{parameter_storage.name}-fold-{fold}"
         # Create the k fold datasets
         train_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[train_ids]
-        dataset_loader.train_dataset = HAM10000Dataset(
-            path=dataset_loader.full_train_dataframe.path,
-            dataframe=train_dataframe,
-            policy=parameter_storage.train_augmentation_policy,
-        )
-        validation_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[validation_ids]
-        dataset_loader.validation_dataset = HAM10000Dataset(
-            path=dataset_loader.full_train_dataframe.path,
-            dataframe=validation_dataframe,
-            policy=parameter_storage.test_augmentation_policy,
-        )
+        if parameter_storage.dataset == "ChestXRAY":
+            dataset_loader.train_dataset = ChestDataset(
+                path=dataset_loader.full_train_dataframe.path,
+                dataframe=train_dataframe,
+                policy=parameter_storage.train_augmentation_policy,
+            )
+            validation_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[validation_ids]
+            dataset_loader.validation_dataset = ChestDataset(
+                path=dataset_loader.full_train_dataframe.path,
+                dataframe=validation_dataframe,
+                policy=parameter_storage.test_augmentation_policy,
+            )
+        else:
+            dataset_loader.train_dataset = ISICDataset(
+                path=dataset_loader.full_train_dataframe.path,
+                dataframe=train_dataframe,
+                policy=parameter_storage.train_augmentation_policy,
+            )
+            validation_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[validation_ids]
+            dataset_loader.validation_dataset = ISICDataset(
+                path=dataset_loader.full_train_dataframe.path,
+                dataframe=validation_dataframe,
+                policy=parameter_storage.test_augmentation_policy,
+            )
         # Create the data loaders
         data_loader_creator = DataLoaderCreator(parameter_storage, dataset_loader)
         data_loader_creator.create_dataloaders()
@@ -135,15 +123,7 @@ def main(run):
     wandb.log({"kfold/test/mean": mean, "kfold/test/std": std, "kfold/test/var": var})
 
 
-def print_gpu_usage():
-    if torch.cuda.is_available():
-        print(f"Current GPU memory allocated: {torch.cuda.memory_allocated() / (1024**2):.2f} MB")
-        print(f"Max GPU memory allocated: {torch.cuda.max_memory_allocated() / (1024**2):.2f} MB")
-
-
 if __name__ == "__main__":
-    # global_large_dummy_tensor = fake_memory_alloc(20)
-    # print_gpu_usage()
     load_dotenv()
     WANDB_API_KEY = os.getenv("WANDB_API_KEY")
     WANDB_ENTITY = os.getenv("WANDB_ENTITY")
@@ -155,7 +135,7 @@ if __name__ == "__main__":
         config={
             "model_architecture": "ensemble",
             "model_type": "all",
-            "dataset": "HAM_10000",
+            "dataset": "ChestXRAY",
             "size": (224, 224),
             "optimizer": "adam",
             "criterion": "ldam",

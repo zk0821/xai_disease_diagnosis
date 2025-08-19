@@ -54,9 +54,12 @@ class Trainer:
         cls_num_list = np.array(
             [
                 len(np.where(self.dataset_loader.train_dataframe["type"] == t)[0])
-                for t in np.unique(self.dataset_loader.train_dataframe["type"])
+                for t in range(len(self.dataset_loader.classes))
             ]
         )
+        # Clamp 0 to 1 -> to avoid loss explosion
+        cls_num_list = [1 if x == 0 else x for x in cls_num_list]
+        print("Class num list:", cls_num_list)
         if self.parameter_storage.class_weights == "none" or self.parameter_storage.class_weights == "weighted_sampler":
             per_cls_weights = None
         elif self.parameter_storage.class_weights == "ins":
@@ -79,9 +82,19 @@ class Trainer:
                 classes=np.unique(self.dataset_loader.train_dataframe["type"]),
                 y=self.dataset_loader.train_dataframe["type"],
             )
+            if len(per_cls_weights) != self.dataset_loader.num_classes:
+                # Adding artifical weight
+                present_classes = np.unique(self.dataset_loader.train_dataframe["type"])
+
+                # Map present class weights to all classes, fill missing with 0
+                weights_dict = dict(zip(present_classes, per_cls_weights))
+                per_cls_weights = np.array(
+                    [weights_dict.get(cls, 0) for cls in range(len(self.dataset_loader.classes))]
+                )
             per_cls_weights = torch.FloatTensor(per_cls_weights).to(self.device)
         else:
             raise RuntimeError(f"Unsupported 'class_weights' option: {self.parameter_storage.class_weights}")
+        print("Per class weights:", per_cls_weights)
         self.cls_num_list = cls_num_list
         self.per_cls_weights = per_cls_weights
 
@@ -141,7 +154,9 @@ class Trainer:
         self.define_weight_strategy(curr_epoch=0)
         self.define_criterion()
         self.define_scheduler()
-        self.model_checkpoint = ModelCheckpoint(enabled=self.parameter_storage.model_checkpoint, use_loss=False)
+        self.model_checkpoint = ModelCheckpoint(
+            enabled=self.parameter_storage.model_checkpoint, use_loss=False, use_kappa=False
+        )
         self.early_stoppage = EarlyStoppage(
             enabled=self.parameter_storage.early_stoppage, patience=12, min_delta=0.1, max_patience=12
         )
@@ -212,12 +227,14 @@ class Trainer:
                         "Train Micro Accuracy": self.evaluator.train_evaluator.micro_accuracy(),
                         "Train Macro Accuracy": self.evaluator.train_evaluator.macro_accuracy(),
                         "Train Balanced Accuracy": self.evaluator.train_evaluator.balanced_accuracy(),
+                        "Train Quadratic Weighted Kappa": self.evaluator.train_evaluator.quadratic_weighted_kappa(),
                         "Train Loss": self.evaluator.train_evaluator.loss(),
                         "Train Macro AUC": self.evaluator.train_evaluator.macro_auc(),
                         "Train Macro AP": self.evaluator.train_evaluator.macro_average_precision(),
                         "Validation Micro Accuracy": self.evaluator.validation_evaluator.micro_accuracy(),
                         "Validation Macro Accuracy": self.evaluator.validation_evaluator.macro_accuracy(),
                         "Validation Balanced Accuracy": self.evaluator.validation_evaluator.balanced_accuracy(),
+                        "Validation Quadratic Weighted Kappa": self.evaluator.validation_evaluator.quadratic_weighted_kappa(),
                         "Validation Loss": self.evaluator.validation_evaluator.loss(),
                         "Validation Macro AUC": self.evaluator.validation_evaluator.macro_auc(),
                         "Validation Macro AP": self.evaluator.validation_evaluator.macro_average_precision(),
@@ -249,12 +266,14 @@ class Trainer:
                                 "train/micro_accuracy": self.evaluator.train_evaluator.micro_accuracy(),
                                 "train/macro_accuracy": self.evaluator.train_evaluator.macro_accuracy(),
                                 "train/balanced_accuracy": self.evaluator.train_evaluator.balanced_accuracy(),
+                                "train/quadratic_weighted_kappa": self.evaluator.train_evaluator.quadratic_weighted_kappa(),
                                 "train/loss": self.evaluator.train_evaluator.loss(),
                                 "train/macro_auc": self.evaluator.train_evaluator.macro_auc(),
                                 "train/macro_ap": self.evaluator.train_evaluator.macro_average_precision(),
                                 "validation/micro_accuracy": self.evaluator.validation_evaluator.micro_accuracy(),
                                 "validation/macro_accuracy": self.evaluator.validation_evaluator.macro_accuracy(),
                                 "validation/balanced_accuracy": self.evaluator.validation_evaluator.balanced_accuracy(),
+                                "validation/quadratic_weighted_kappa": self.evaluator.validation_evaluator.quadratic_weighted_kappa(),
                                 "validation/loss": self.evaluator.validation_evaluator.loss(),
                                 "validation/macro_auc": self.evaluator.validation_evaluator.macro_auc(),
                                 "validation/macro_ap": self.evaluator.validation_evaluator.macro_average_precision(),
@@ -269,7 +288,9 @@ class Trainer:
                         self.scheduler.step()
                 # Model Checkpoint
                 if self.model_checkpoint.save_checkpoint(
-                    self.evaluator.validation_evaluator.loss(), self.evaluator.validation_evaluator.balanced_accuracy()
+                    self.evaluator.validation_evaluator.loss(),
+                    self.evaluator.validation_evaluator.balanced_accuracy(),
+                    self.evaluator.validation_evaluator.quadratic_weighted_kappa(),
                 ):
                     print(
                         f"[Epoch {epoch}] Validation Loss={self.evaluator.validation_evaluator.loss()}, Validation Balanced Accuracy={self.evaluator.validation_evaluator.balanced_accuracy()}. Saving model.."
@@ -334,7 +355,7 @@ class Trainer:
                     all_crops_batch = all_crops_batch.to(self.device)
                     labels = labels.to(self.device)
                     outputs = self.model(all_crops_batch)
-                    outputs = outputs.view(images.shape[0], num_crops, 7)
+                    outputs = outputs.view(images.shape[0], num_crops, self.dataset_loader.num_classes)
                     outputs = outputs.mean(dim=1)
                 else:
                     labels = labels.to(self.device)
@@ -374,6 +395,7 @@ class Trainer:
                         "best_validation/micro_accuracy": self.evaluator.validation_evaluator.micro_accuracy(),
                         "best_validation/macro_accuracy": self.evaluator.validation_evaluator.macro_accuracy(),
                         "best_validation/balanced_accuracy": self.evaluator.validation_evaluator.balanced_accuracy(),
+                        "best_validation/quadratic_weighted_kappa": self.evaluator.validation_evaluator.quadratic_weighted_kappa(),
                         "best_validation/loss": self.evaluator.validation_evaluator.loss(),
                         "best_validation/macro_auc": self.evaluator.validation_evaluator.macro_auc(),
                         "best_validation/macro_ap": self.evaluator.validation_evaluator.macro_average_precision(),
@@ -401,6 +423,7 @@ class Trainer:
                         "test/micro_accuracy": self.evaluator.test_evaluator.micro_accuracy(),
                         "test/macro_accuracy": self.evaluator.test_evaluator.macro_accuracy(),
                         "test/balanced_accuracy": self.evaluator.test_evaluator.balanced_accuracy(),
+                        "test/quadratic_weighted_kappa": self.evaluator.test_evaluator.quadratic_weighted_kappa(),
                         "test/loss": self.evaluator.test_evaluator.loss(),
                         "test/macro_auc": self.evaluator.test_evaluator.macro_auc(),
                         "test/macro_ap": self.evaluator.test_evaluator.macro_average_precision(),

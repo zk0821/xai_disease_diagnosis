@@ -1,7 +1,6 @@
 import os
 
 from utils.parameter_storage import ParameterStorage
-from data.transforms_creator import TransformsCreator
 from data.dataset_loader import DatasetLoader
 from data.data_loader_creator import DataLoaderCreator
 from evaluation.evaluator import Evaluator
@@ -23,36 +22,23 @@ def main(run):
         model_type=run.config.model_type,
         dataset=run.config.dataset,
         size=run.config.size,
-        do_oversampling=run.config.do_oversampling,
         class_weights=run.config.class_weights,
+        weight_strategy=run.config.weight_strategy,
         optimizer=run.config.optimizer,
         learning_rate=run.config.learning_rate,
         weight_decay=run.config.weight_decay,
         criterion=run.config.criterion,
         scheduler=run.config.scheduler,
+        model_checkpoint=run.config.model_checkpoint,
         early_stoppage=run.config.early_stoppage,
         epochs=run.config.epochs,
         batch_size=run.config.batch_size,
-        solarize=run.config.solarize,
-        saturation=run.config.saturation,
-        contrast=run.config.contrast,
-        brightness=run.config.brightness,
-        sharpness=run.config.sharpness,
-        hue=run.config.hue,
-        posterization=run.config.posterization,
-        rotation=run.config.rotation,
-        erasing=run.config.erasing,
-        affine=run.config.affine,
-        crop=run.config.crop,
-        gaussian_noise=run.config.gaussian_noise,
         focal_loss_gamma=run.config.focal_loss_gamma,
-        class_balance_beta=run.config.class_balance_beta,
-        augmentation_probability=run.config.augmentation_probability,
-        validation_split=run.config.validation_split,
-        augmentation_policy=run.config.augmentation_policy,
-        augmentation_magnitude=run.config.augmentation_magnitude,
-        test_time_augmentation=run.config.test_time_augmentation,
-        random_seed=run.config.random_seed
+        train_augmentation_policy=run.config.train_augmentation_policy,
+        train_augmentation_probability=run.config.train_augmentation_probability,
+        train_augmentation_magnitude=run.config.train_augmentation_magnitude,
+        test_augmentation_policy=run.config.test_augmentation_policy,
+        random_seed=run.config.random_seed,
     )
     # Set the random seeds for reproducibility
     torch.manual_seed(parameter_storage.random_seed)
@@ -63,9 +49,6 @@ def main(run):
     # Make GPUs deterministic
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    # Transforms
-    # transforms_creator = TransformsCreator(parameter_storage)
-    # transforms_creator.create_transforms()
     # Load the dataset
     dataset_loader = DatasetLoader(parameter_storage)
     # Create the data loaders
@@ -85,45 +68,32 @@ if __name__ == "__main__":
     WANDB_API_KEY = os.getenv("WANDB_API_KEY")
     WANDB_ENTITY = os.getenv("WANDB_ENTITY")
     WANDB_PROJECT = os.getenv("WANDB_PROJECT")
-    wandb.login(key=WANDB_API_KEY, relogin=True)
+    wandb.login(key=WANDB_API_KEY)
     run = wandb.init(
         entity=WANDB_ENTITY,
         project=WANDB_PROJECT,
         config={
-            "model_architecture": "efficient_net",
-            "model_type": "b2",
-            "dataset": "HAM_10000",
+            "model_architecture": "ensemble",
+            "model_type": "all",
+            "dataset": "APTOS2019",
             "size": (224, 224),
             "optimizer": "adam",
-            "criterion": "cross_entropy",
-            "scheduler": "none",
+            "criterion": "ldam",
+            "scheduler": "plateau",
+            "model_checkpoint": True,
             "early_stoppage": False,
-            "learning_rate": 2e-4,
-            "weight_decay": 1e-4,
-            "epochs": 70,
+            "learning_rate": 0.03,
+            "weight_decay": 0,
+            "epochs": 50,
             "batch_size": 32,
-            "class_weights": "none",
-            "do_oversampling": False,
-            "solarize": 128,
-            "saturation": (0.8, 1.2),
-            "contrast": (0.8, 1.2),
-            "brightness": (0.8, 1.2),
-            "sharpness": 1,
-            "hue": 0.0,
-            "posterization": 5,
-            "rotation": 30,
-            "erasing": 0.2,
-            "affine": 0.1,
-            "crop": (0.7, 1.0),
-            "gaussian_noise": 0.0,
+            "class_weights": "balanced",
+            "weight_strategy": "deferred",
             "focal_loss_gamma": 2,
-            "class_balance_beta": 0.999,
-            "augmentation_probability": 0.0,
-            "validation_split": 0.2,
-            "augmentation_policy": "none",
-            "augmentation_magnitude": 0,
-            "test_time_augmentation": False,
-            "random_seed": 380
+            "train_augmentation_policy": "v1_0",
+            "train_augmentation_probability": 0.7,
+            "train_augmentation_magnitude": 5,
+            "test_augmentation_policy": "multi_crop",
+            "random_seed": 2025,
         },
     )
     main(run)

@@ -6,8 +6,8 @@
 #SBATCH --partition=gpu
 #SBATCH --gpus=1
 #SBATCH --time=24:00:00
-#SBATCH --output=logs/grad_cam.out
-#SBATCH --error=logs/grad_cam.err
+#SBATCH --output=logs/gradcam_plus_plus.out
+#SBATCH --error=logs/gradcam_plus_plus.err
 #SBATCH --job-name="GradCam"
 #SBATCH --exclude=gwn[01-07],gwn[08-10]
 

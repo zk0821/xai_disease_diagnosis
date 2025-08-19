@@ -2,7 +2,7 @@ import os
 
 from sklearn.model_selection import StratifiedKFold
 from utils.parameter_storage import ParameterStorage
-from data.ham10000_dataset import HAM10000Dataset
+from data.isic_dataset import ISICDataset
 from data.dataset_loader import DatasetLoader
 from data.data_loader_creator import DataLoaderCreator
 from evaluation.evaluator import Evaluator
@@ -66,13 +66,13 @@ def main(run):
         print("-------------------")
         # Create the k fold datasets
         train_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[train_ids]
-        dataset_loader.train_dataset = HAM10000Dataset(
+        dataset_loader.train_dataset = ISICDataset(
             path=dataset_loader.full_train_dataframe.path,
             dataframe=train_dataframe,
             policy=parameter_storage.train_augmentation_policy,
         )
         validation_dataframe = dataset_loader.full_train_dataframe.get_dataframe().loc[validation_ids]
-        dataset_loader.validation_dataset = HAM10000Dataset(
+        dataset_loader.validation_dataset = ISICDataset(
             path=dataset_loader.full_train_dataframe.path,
             dataframe=validation_dataframe,
             policy=parameter_storage.test_augmentation_policy,

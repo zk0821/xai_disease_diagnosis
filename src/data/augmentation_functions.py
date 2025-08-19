@@ -53,11 +53,11 @@ def blend(image1, image2, factor):
 
 
 def mixup(image, image_for_mixup, magnitude):
-    """ mixup the corresponding pixels of image 1 and image 2. """
-    _max = 0.2      # mixed intensity：0.0--0.2,
+    """mixup the corresponding pixels of image 1 and image 2."""
+    _max = 0.2  # mixed intensity：0.0--0.2,
     _min = 0.0
     p = (_max - _min) / g_grade_num
-    factor = random.uniform(_min, _min + p * magnitude) # magnitude is random
+    factor = random.uniform(_min, _min + p * magnitude)  # magnitude is random
     height, width = image.shape[:2]
     image2 = cv2.resize(image_for_mixup.numpy(), (width, height))
     image2 = torch.from_numpy(np.array(image2, dtype=np.uint8))
@@ -539,10 +539,12 @@ def resize(image, min_size=256):
     img_scale = torch.from_numpy(np.array(img_scale, dtype=np.uint8))
     return torch.from_numpy(np.array(img_scale, dtype=np.uint8))
 
+
 def full_resize(image, size):
     resized_image = cv2.resize(image.numpy(), size)
     resized_image = torch.from_numpy(np.array(resized_image, dtype=np.uint8))
     return resized_image
+
 
 def color_casting(image, magnitude):
     """Add a bias to a color channel in RGB
@@ -564,7 +566,8 @@ def color_casting(image, magnitude):
             image[:, :, i] = img
     return image
 
-'''
+
+"""
 def multi_crop(image, num_crops=16):
     return Image.fromarray(image.numpy())
     crops = []
@@ -599,7 +602,8 @@ def multi_crop(image, num_crops=16):
         crop = image[:, y_loc : y_loc + 224, x_loc : x_loc + 224]
         crops.append(crop)
     return crops
-'''
+"""
+
 
 class RandomCropInRate(object):
     """random crop

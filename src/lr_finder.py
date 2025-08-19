@@ -22,8 +22,8 @@ import numpy as np
 def main():
     parameter_storage = ParameterStorage(
         name="Learning Rate Finder",
-        model_architecture="ensemble",
-        model_type="all",
+        model_architecture="efficient_net",
+        model_type="b2",
         dataset="HAM_10000",
         size=(224, 224),
         optimizer="adam",
@@ -101,6 +101,7 @@ def main():
         print("Running")
         trainer_with_lr_finder.run(data_loader_creator.train_dataloader)
 
+    print("Results:", lr_finder.get_results())
     ax = lr_finder.plot()
     ax.figure.savefig("lr_finder_plot.png")
     print("Suggestion", lr_finder.lr_suggestion())

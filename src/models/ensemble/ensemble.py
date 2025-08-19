@@ -108,6 +108,11 @@ class EnsembleModel(nn.Module):
         out = self.classifier(concat)
         return out
 
+    def get_concat(self, x):
+        outputs = [model(x) for model in self.ensemble]
+        concat = torch.cat(outputs, dim=1)
+        return concat
+
     def unfreeze_pretrained_layers(self):
         # Do nothing
         print("Pre-trained layers should remain frozen")

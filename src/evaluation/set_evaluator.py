@@ -1,7 +1,14 @@
 import torch
 import numpy as np
 
-from sklearn.metrics import balanced_accuracy_score, classification_report, confusion_matrix, roc_auc_score, average_precision_score
+from sklearn.metrics import (
+    balanced_accuracy_score,
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+    average_precision_score,
+    cohen_kappa_score,
+)
 
 
 class SetEvaluator:
@@ -46,7 +53,7 @@ class SetEvaluator:
 
     def per_class_accuracies(self):
         # Get the confusion matrix
-        cm = confusion_matrix(self.labels, self.predictions)
+        cm = confusion_matrix(self.labels, self.predictions, labels=range(self.num_classes))
 
         # We will store the results in a dictionary for easy access later
         per_class_accuracies = {}
@@ -60,17 +67,26 @@ class SetEvaluator:
             # True positives are all the samples of our current GT class that were predicted as such
             true_positives = cm[idx, idx]
 
-            # The accuracy for the current class is the ratio between correct predictions to all predictions
-            per_class_accuracies[self.classes[idx]] = (true_positives + true_negatives) / np.sum(cm)
+            # Total samples
+            total = np.sum(cm)
+
+            if total == 0:
+                per_class_accuracies[self.classes[idx]] = np.nan
+            else:
+                # The accuracy for the current class is the ratio between correct predictions to all predictions
+                per_class_accuracies[self.classes[idx]] = (true_positives + true_negatives) / total
 
         return per_class_accuracies
 
     def macro_accuracy(self):
         per_class_acc = self.per_class_accuracies()
         macro_acc = 0
+        num_valid_acc = 0
         for c in per_class_acc:
-            macro_acc += per_class_acc[c]
-        macro_acc /= self.num_classes
+            if not np.isnan(per_class_acc[c]):
+                macro_acc += per_class_acc[c]
+                num_valid_acc += 1
+        macro_acc /= num_valid_acc
         return macro_acc
 
     def balanced_accuracy(self):
@@ -88,16 +104,23 @@ class SetEvaluator:
             other_class = [x for x in range(self.num_classes) if x != idx]
             new_labels = [0 if x in other_class else 1 for x in self.labels]
             new_probs = self.probabilities[:, idx]
-            roc_auc = roc_auc_score(new_labels, new_probs)
+            if len(set(new_labels)) < 2:
+                per_class_auc[self.classes[idx]] = np.nan
+                continue
+            else:
+                roc_auc = roc_auc_score(new_labels, new_probs)
             per_class_auc[self.classes[idx]] = roc_auc
         return per_class_auc
 
     def macro_auc(self):
         per_class_aucs = self.per_class_auc()
         macro_auc = 0
+        num_valid_auc = 0
         for c in per_class_aucs:
-            macro_auc += per_class_aucs[c]
-        macro_auc /= self.num_classes
+            if not np.isnan(per_class_aucs[c]):
+                macro_auc += per_class_aucs[c]
+                num_valid_auc += 1
+        macro_auc /= num_valid_auc
         return macro_auc
 
     def roc(self):
@@ -120,3 +143,7 @@ class SetEvaluator:
             macro_ap += per_class_aps[c]
         macro_ap /= self.num_classes
         return macro_ap
+
+    def quadratic_weighted_kappa(self):
+        quadratic_weighted_kappa = cohen_kappa_score(self.labels, self.predictions, weights="quadratic")
+        return quadratic_weighted_kappa

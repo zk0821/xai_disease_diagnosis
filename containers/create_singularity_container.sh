@@ -10,4 +10,5 @@ singularity exec containers/singularity_container.sif pip uninstall opencv-pytho
 singularity exec containers/singularity_container.sif pip install opencv-python-headless
 singularity exec containers/singularity_container.sif pip install cvxopt
 singularity exec containers/singularity_container.sif pip install grad-cam
+singularity exec containers/singularity_container.sif pip install captum
 singularity exec containers/singularity_container.sif pip install --upgrade numpy==1.25.0
